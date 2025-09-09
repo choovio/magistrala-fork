@@ -1,0 +1,97 @@
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+name: SBX Manifest Guard
+
+on:
+  pull_request:
+    branches: [ main, sbx-matrix-scout ]
+    paths:
+      - "ops/sbx/*.yaml"
+      - "ops/matrix/sources.json"
+      - ".github/workflows/sbx-manifest-guard.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Validate SBX manifests vs sources.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq & yq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+          YQ_VERSION=v4.44.3
+          curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate containerPorts, Service.targetPort, image digests, and ingress paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="ops/matrix/sources.json"
+          declare -A map=( ["users"]="users" ["things"]="clients" ["domains"]="domains" ["certs"]="certs" ["http-adapter"]="http-adapter" ["ws-adapter"]="ws-adapter" )
+          fail=0
+
+          for svc in "${!map[@]}"; do
+            srcKey="${map[$svc]}"
+            yaml="ops/sbx/${svc}.yaml"
+            if [[ ! -f "$yaml" ]]; then
+              echo "::error ::Missing manifest $yaml"
+              fail=1; continue
+            fi
+
+            exp_port=$(jq -r --arg s "$srcKey" '.[] | select(.service==$s) | .ports[0]' "$src")
+            if [[ -z "$exp_port" || "$exp_port" == "null" ]]; then
+              echo "::error ::No expected port for $svc from $src"
+              fail=1; continue
+            fi
+
+            got_cport=$(yq '.spec.template.spec.containers[0].ports[0].containerPort' "$yaml")
+            got_tport=$(yq '.spec.ports[] | select(.port==80) | .targetPort' "$yaml")
+            img=$(yq '.spec.template.spec.containers[0].image' "$yaml")
+
+            printf "%-12s | expected:%-5s | cport:%-5s | tport:%-5s | image:%s\n" "$svc" "$exp_port" "$got_cport" "$got_tport" "$img"
+
+            if [[ "$got_cport" != "$exp_port" ]]; then
+              echo "::error ::$svc containerPort=$got_cport != expected $exp_port"
+              fail=1
+            fi
+            if [[ "$got_tport" != "$exp_port" ]]; then
+              echo "::error ::$svc Service.targetPort=$got_tport != expected $exp_port"
+              fail=1
+            fi
+            if [[ "$img" != *"@sha256:"* ]]; then
+              echo "::error ::$svc image must be pinned with digest (@sha256:...), got '$img'"
+              fail=1
+            fi
+            if [[ "$img" == *":latest"* ]]; then
+              echo "::error ::$svc image must not use :latest"
+              fail=1
+            fi
+          done
+
+          # Ingress rule presence checks
+          ingress="ops/sbx/ingress-rules.yaml"
+          req_paths=( "/api/users/?(.*)" "/api/things/?(.*)" "/api/domains/?(.*)" "/api/certs/?(.*)" "/api/http/?(.*)" "/api/ws/?(.*)" )
+          if [[ ! -f "$ingress" ]]; then
+            echo "::error ::Missing $ingress"; fail=1
+          else
+            for p in "${req_paths[@]}"; do
+              if ! yq --exit-status ".spec.rules[].http.paths[] | select(.path == \"$p\")" "$ingress" >/dev/null; then
+                echo "::error ::Ingress path missing: $p"
+                fail=1
+              fi
+            done
+          fi
+
+          if [[ $fail -ne 0 ]]; then
+            echo "SBX Manifest Guard found issues."
+            exit 1
+          fi
+          echo "SBX Manifest Guard OK."
