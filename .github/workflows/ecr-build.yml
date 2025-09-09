@@ -1,0 +1,94 @@
+name: Build & Push Magistrala Services to ECR
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**/Dockerfile*'
+      - '.github/workflows/ecr-build.yml'
+      - '**/*.go'
+      - '**/go.mod'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT_ID: 595443389404
+  ECR_REPO: magistrala
+
+jobs:
+  build-push:
+    name: Build & Push (${{ matrix.service.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - { name: "bootstrap",        context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "provision",        context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "re",               context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "postgres-writer",  context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "postgres-reader",  context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "timescale-writer", context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "timescale-reader", context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "cli",              context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "alarms",           context: ".", dockerfile: "docker/Dockerfile" }
+          - { name: "reports",          context: ".", dockerfile: "docker/Dockerfile" }
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute tags
+        id: vars
+        run: |
+          SHORT_SHA="${GITHUB_SHA::8}"
+          DATE=$(date +%Y%m%d)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "DATE=$DATE" >> $GITHUB_OUTPUT
+          echo "REPO_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}" >> $GITHUB_OUTPUT
+
+      - name: Build image
+        run: |
+          IMG="${{ steps.vars.outputs.REPO_URI }}"
+          SVC="${{ matrix.service.name }}"
+          SHA_TAG="${SVC}-${{ steps.vars.outputs.SHORT_SHA }}"
+          SBX_TAG="sbx-${SVC}-${{ steps.vars.outputs.DATE }}-${{ steps.vars.outputs.SHORT_SHA }}"
+          docker build \
+            -f "${{ matrix.service.dockerfile }}" \
+            --build-arg SVC="${SVC}" \
+            -t "${IMG}:${SHA_TAG}" \
+            -t "${IMG}:${SBX_TAG}" \
+            "${{ matrix.service.context }}"
+
+      - name: Push image (both tags)
+        run: |
+          IMG="${{ steps.vars.outputs.REPO_URI }}"
+          SVC="${{ matrix.service.name }}"
+          docker push "${IMG}:${SVC}-${{ steps.vars.outputs.SHORT_SHA }}"
+          docker push "${IMG}:sbx-${SVC}-${{ steps.vars.outputs.DATE }}-${{ steps.vars.outputs.SHORT_SHA }}"
+
+      - name: Emit pick (JSON line)
+        run: |
+          IMG="${{ steps.vars.outputs.REPO_URI }}"
+          SVC="${{ matrix.service.name }}"
+          echo "{\"service\":\"${SVC}\",\"repository\":\"${{ env.ECR_REPO }}\",\"shaTag\":\"${SVC}-${{ steps.vars.outputs.SHORT_SHA }}\",\"sbxTag\":\"sbx-${SVC}-${{ steps.vars.outputs.DATE }}-${{ steps.vars.outputs.SHORT_SHA }}\"}" >> picks.json
+
+      - name: Upload picks artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecr-picks-${{ matrix.service.name }}
+          path: picks.json
