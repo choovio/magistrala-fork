@@ -1,0 +1,36 @@
+# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+name: Sources JSON Artifact
+
+on:
+  pull_request:
+    branches: [ main, sbx-matrix-scout ]
+    paths:
+      - "ops/matrix/sources.json"
+      - ".github/workflows/sources-artifact.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Upload sources.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify sources.json
+        run: |
+          if [[ ! -f ops/matrix/sources.json ]]; then
+            echo "::error file=ops/matrix/sources.json::sources.json not found"
+            exit 1
+          fi
+          jq '.' ops/matrix/sources.json >/dev/null
+
+      - name: Upload sources.json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources-json
+          path: ops/matrix/sources.json
