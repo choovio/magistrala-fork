@@ -1,4 +1,7 @@
-﻿name: Matrix Scout (no-build sanity)
+﻿# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 CHOOVIO Inc.
+
+name: Matrix Scout (no-build sanity)
 
 on:
   push:
@@ -103,3 +106,4 @@ jobs:
         with:
           name: matrix-json
           path: ops/matrix/matrix.json
+
