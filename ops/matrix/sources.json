@@ -1,0 +1,8 @@
+[
+  {"service":"users","composeImage":"supermq/users:latest","ports":["9002"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/docker-compose.yaml:818-885; docker/supermq-docker/.env:227-240"},
+  {"service":"clients","composeImage":"supermq/clients:latest","ports":["9006","7006"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/docker-compose.yaml:445-520; docker/supermq-docker/.env:315-323"},
+  {"service":"domains","composeImage":"supermq/domains:latest","ports":["9003","7003"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/docker-compose.yaml:214-289; docker/supermq-docker/.env:157-164"},
+  {"service":"certs","composeImage":"supermq/certs:latest","ports":["9019"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/addons/certs/docker-compose.yaml:33-43; docker/supermq-docker/.env:429-433"},
+  {"service":"http-adapter","composeImage":"supermq/http:latest","ports":["8008"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/docker-compose.yaml:1213-1256; docker/supermq-docker/.env:378-380"},
+  {"service":"ws-adapter","composeImage":"supermq/ws:latest","ports":["8186"],"sourcePath":"","missingSource":true,"notes":"docker/supermq-docker/docker-compose.yaml:1426-1469; docker/supermq-docker/.env:416-418"}
+]
