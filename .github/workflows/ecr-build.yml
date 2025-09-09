@@ -1,6 +1,5 @@
-﻿# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
 name: Build & Push Magistrala Services to ECR
 
 on:
@@ -95,4 +94,5 @@ jobs:
         with:
           name: ecr-picks-${{ matrix.service.name }}
           path: picks.json
+
 

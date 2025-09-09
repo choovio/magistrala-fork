@@ -1,6 +1,5 @@
-﻿# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
 name: Matrix Scout (no-build sanity)
 
 on:
@@ -111,3 +110,4 @@ jobs:
         with:
           name: matrix-json
           path: ops/matrix/matrix.json
+
