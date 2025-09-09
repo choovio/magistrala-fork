@@ -41,8 +41,7 @@ jobs:
             echo "::error file=$FILE::matrix.json not found"
             exit 1
           fi
-          cat "$FILE" | jq '.' >/dev/null
-          echo "ok"
+          jq '.' "$FILE" >/dev/null
 
       - name: Validate entries and print report
         id: validate
@@ -58,10 +57,11 @@ jobs:
           echo
 
           FAIL=0
-          printf "%-14s | %-24s | %-18s | %-9s | %-10s\n" "service" "dockerfile" "context" "unresolved" "port"
-          printf -- "---------------------------------------------------------------------------------------------\n"
+          UNRES=0
+          printf "%-14s | %-28s | %-22s | %-9s | %-10s\n" "service" "dockerfile" "context" "unresolved" "port"
+          printf -- "-------------------------------------------------------------------------------------------------\n"
 
-          jq -c '.services[]' "$FILE" | while read -r row; do
+          while IFS= read -r row; do
             name=$(jq -r '.name' <<<"$row")
             dockerfile=$(jq -r '.dockerfile' <<<"$row")
             context=$(jq -r '.context' <<<"$row")
@@ -74,7 +74,7 @@ jobs:
               echo "::error title=Missing dockerfile::$name → $dockerfile not found"
               FAIL=1
             fi
-            if [[ -n "$context" && ! -d "$context" && "$context" != "." ]]; then
+            if [[ -n "$context" && "$context" != "." && ! -d "$context" ]]; then
               echo "::error title=Missing context::$name → $context not found"
               FAIL=1
             fi
@@ -86,12 +86,16 @@ jobs:
             if [[ "$unresolved" == "true" ]]; then
               echo "::error title=Unresolved service::$name is marked unresolved. Notes: $notes"
               FAIL=1
+              UNRES=$((UNRES+1))
             fi
 
-            printf "%-14s | %-24s | %-18s | %-9s | %-10s\n" "$name" "$dockerfile" "$context" "$unresolved" "$port"
-          done
+            printf "%-14s | %-28s | %-22s | %-9s | %-10s\n" "$name" "$dockerfile" "$context" "$unresolved" "$port"
+          done < <(jq -c '.services[]' "$FILE")
 
           echo
+          echo "Unresolved count: $UNRES"
+          echo
+
           if [[ "$FAIL" -ne 0 ]]; then
             echo "::group::Matrix Scout Summary"
             echo "One or more services are unresolved or misconfigured. See errors above."
@@ -99,6 +103,7 @@ jobs:
             echo "::endgroup::"
             exit 1
           fi
+
           echo "Matrix looks resolvable. OK."
 
       - name: Upload matrix.json as artifact (for auditing)
@@ -106,4 +111,3 @@ jobs:
         with:
           name: matrix-json
           path: ops/matrix/matrix.json
-
