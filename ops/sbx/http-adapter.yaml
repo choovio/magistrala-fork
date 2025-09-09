@@ -1,0 +1,63 @@
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+# port sourced from docker/supermq-docker (.env/compose); replace digest; adjust ConfigMap name if needed
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-adapter
+  namespace: magistrala
+  labels:
+    app: http-adapter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http-adapter
+  template:
+    metadata:
+      labels:
+        app: http-adapter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: http-adapter
+        image: supermq/http@sha256:TO_FILL
+        ports:
+        - containerPort: 8008
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8008
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8008
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: http-adapter-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-adapter
+  namespace: magistrala
+  labels:
+    app: http-adapter
+spec:
+  selector:
+    app: http-adapter
+  ports:
+  - port: 80
+    targetPort: 8008

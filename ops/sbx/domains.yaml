@@ -1,0 +1,63 @@
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+# port sourced from docker/supermq-docker (.env/compose); replace digest; adjust ConfigMap name if needed
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: domains
+  namespace: magistrala
+  labels:
+    app: domains
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: domains
+  template:
+    metadata:
+      labels:
+        app: domains
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: domains
+        image: supermq/domains@sha256:TO_FILL
+        ports:
+        - containerPort: 9003
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9003
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9003
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: domains-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: domains
+  namespace: magistrala
+  labels:
+    app: domains
+spec:
+  selector:
+    app: domains
+  ports:
+  - port: 80
+    targetPort: 9003

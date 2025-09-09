@@ -1,0 +1,63 @@
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+# port sourced from docker/supermq-docker (.env/compose); replace digest; adjust ConfigMap name if needed
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: things
+  namespace: magistrala
+  labels:
+    app: things
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: things
+  template:
+    metadata:
+      labels:
+        app: things
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: things
+        image: supermq/clients@sha256:TO_FILL
+        ports:
+        - containerPort: 9006
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9006
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9006
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: things-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: things
+  namespace: magistrala
+  labels:
+    app: things
+spec:
+  selector:
+    app: things
+  ports:
+  - port: 80
+    targetPort: 9006

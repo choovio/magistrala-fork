@@ -1,0 +1,67 @@
+﻿# Copyright (c) 2025 Choovio Inc.
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api
+  namespace: magistrala
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://sbx.gobee.io"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/websocket-services: ws-adapter
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  tls:
+  - hosts:
+    - sbx.gobee.io
+    secretName: sbx-gobee-io-tls
+  rules:
+  - host: sbx.gobee.io
+    http:
+      paths:
+      - path: /api/users/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: users
+            port:
+              number: 80
+      - path: /api/things/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: things
+            port:
+              number: 80
+      - path: /api/domains/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: domains
+            port:
+              number: 80
+      - path: /api/certs/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: certs
+            port:
+              number: 80
+      - path: /api/http/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: http-adapter
+            port:
+              number: 80
+      - path: /api/ws/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ws-adapter
+            port:
+              number: 80
