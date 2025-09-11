@@ -1,3 +1,6 @@
+﻿# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 CHOOVIO Inc.
+
 name: Build & Push Magistrala Services to ECR
 
 on:
