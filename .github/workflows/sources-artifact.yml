@@ -1,48 +1,84 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-<<<<<<< HEAD
-=======
 # SPDX-License-Identifier: MIT
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# Copyright (c) 2025 Choovio Inc.
->>>>>>> fc4914f1 (CI: fix license headers (canonical SPDX) + normalize docker/login-action to @v3)
-# SPDX-License-Identifier: Apache-2.0
-
+---
 name: Sources JSON Artifact
 
 on:
   pull_request:
-    branches: [ main, sbx-matrix-scout ]
+  push:
+    branches: [ main ]
     paths:
-      - "ops/matrix/sources.json"
-      - ".github/workflows/sources-artifact.yml"
-  workflow_dispatch: {}
+      - '.github/workflows/sources-artifact.yml'
+      - 'ops/sources/**'
 
 permissions:
   contents: read
 
 jobs:
-  upload:
-    name: Upload sources.json
+  sources-json:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Verify sources.json
+      - name: Ensure ops/sources/sources.json exists (generate if missing)
+        shell: bash
         run: |
-          if [[ ! -f ops/matrix/sources.json ]]; then
-            echo "::error file=ops/matrix/sources.json::sources.json not found"
-            exit 1
+          mkdir -p ops/sources
+          if [ ! -f ops/sources/sources.json ]; then
+            cat > ops/sources/sources.json <<'JSON'
+            {
+              "version": 1,
+              "sources": [
+                { "name": "bootstrap", "path": "cmd/bootstrap" },
+                { "name": "users",     "path": "cmd/users" },
+                { "name": "things",    "path": "cmd/things" },
+                { "name": "certs",     "path": "cmd/certs" },
+                { "name": "domains",   "path": "cmd/domains" },
+                { "name": "provision", "path": "cmd/provision" },
+                { "name": "reports",   "path": "cmd/reports" },
+                { "name": "re",        "path": "cmd/re" },
+                { "name": "postgres-reader",  "path": "cmd/postgres-reader" },
+                { "name": "postgres-writer",  "path": "cmd/postgres-writer" },
+                { "name": "timescale-reader", "path": "cmd/timescale-reader" },
+                { "name": "timescale-writer", "path": "cmd/timescale-writer" }
+              ]
+            }
+            JSON
+            echo "Generated ops/sources/sources.json"
+          else
+            echo "Found existing ops/sources/sources.json"
           fi
-          jq '.' ops/matrix/sources.json >/dev/null
+          echo
+          echo "---- sources.json ----"
+          sed -n '1,200p' ops/sources/sources.json
+
+      - name: Validate schema (lightweight)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          p = 'ops/sources/sources.json'
+          try:
+              data = json.load(open(p))
+          except Exception as e:
+              print(f"Invalid JSON in {p}: {e}")
+              sys.exit(1)
+          if not isinstance(data.get('version'), int):
+              print("sources.json: 'version' must be an integer"); sys.exit(1)
+          svcs = data.get('sources')
+          if not isinstance(svcs, list) or not svcs:
+              print("sources.json: 'sources' must be a non-empty list"); sys.exit(1)
+          bad = [s for s in svcs if not isinstance(s, dict) or 'name' not in s or 'path' not in s]
+          if bad:
+              print(f"sources.json: entries missing required keys: {bad}"); sys.exit(1)
+          print("sources.json schema looks OK.")
+          PY
 
       - name: Upload sources.json artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sources-json
-          path: ops/matrix/sources.json
+          name: sources.json
+          path: ops/sources/sources.json
