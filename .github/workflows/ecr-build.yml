@@ -1,70 +1,84 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
 ---
-name: ECR Build / Build and Push to ECR
+name: ECR Build / Build and Push to ECR (dynamic)
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'cmd/**'
       - 'Dockerfile*'
+      - 'cmd/**'
+      - '.github/workflows/ecr-build.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile*'
+      - 'cmd/**'
       - '.github/workflows/ecr-build.yml'
   workflow_dispatch: {}
 
 permissions:
-  id-token: write   # OIDC for AWS
+  id-token: write   # for AWS OIDC
   contents: read
 
 env:
-  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}     # set this repo secret (e.g., us-west-2)
-  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}         # full ARN, e.g., arn:aws:iam::595443389404:role/GithubActionsECRPush
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}     # 12-digit account ID
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}   # e.g., us-west-2
+  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}       # full ARN
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}   # 12-digit account id
 
 jobs:
+  discover:
+    name: Discover Dockerfiles → matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.mk.outputs.matrix }}
+      count: ${{ steps.mk.outputs.count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - name: Find Dockerfile.* and build matrix JSON
+        id: mk
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=( Dockerfile.* )
+          # Build JSON array of {"service":"X","dockerfile":"Dockerfile.X"}
+          json='{"include":['
+          count=0
+          for f in "${files[@]}"; do
+            # service name = suffix after "Dockerfile."
+            svc="${f#Dockerfile.}"
+            # Skip obvious non-services if any
+            if [[ -z "$svc" ]]; then continue; fi
+            [[ $count -gt 0 ]] && json+=','
+            json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
+            ((count++))
+          done
+          json+=']}'
+          echo "Discovered ${count} Dockerfiles:"
+          printf '%s\n' "${files[@]}" | sed '/^$/d' || true
+          echo "matrix=${json}" >> "$GITHUB_OUTPUT"
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "---- MATRIX JSON ----"
+          echo "${json}"
+
   build:
+    name: Build & Push (${{ matrix.service }})
+    needs: discover
+    if: ${{ fromJson(needs.discover.outputs.count) > 0 }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # Core services (map to explicit Dockerfiles)
-          - service: bootstrap
-            dockerfile: Dockerfile.bootstrap
-          - service: users
-            dockerfile: Dockerfile.users
-          - service: things
-            dockerfile: Dockerfile.things
-          - service: certs
-            dockerfile: Dockerfile.certs
-          - service: domains
-            dockerfile: Dockerfile.domains
-          - service: provision
-            dockerfile: Dockerfile.provision
-
-          # Readers/Writers (names taken from failing checks)
-          - service: postgres-reader
-            dockerfile: Dockerfile.postgres-reader
-          - service: postgres-writer
-            dockerfile: Dockerfile.postgres-writer
-          - service: timescale-reader
-            dockerfile: Dockerfile.timescale-reader
-          - service: timescale-writer
-            dockerfile: Dockerfile.timescale-writer
-
-          # Reports & Rules (“re” from failing checks)
-          - service: reports
-            dockerfile: Dockerfile.reports
-          - service: re
-            dockerfile: Dockerfile.re
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+        with: { fetch-depth: 1 }
 
-      - name: Validate AWS configuration
+      - name: Validate AWS secrets present
         shell: bash
         run: |
           : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION}"
@@ -96,16 +110,13 @@ jobs:
       - name: Build image
         shell: bash
         env:
-          SVC: ${{ matrix.service }}
           DOCKERFILE: ${{ matrix.dockerfile }}
+          SVC: ${{ matrix.service }}
         run: |
           if [ ! -f "${DOCKERFILE}" ]; then
-            echo "ERROR: Missing ${DOCKERFILE} for service ${SVC}"; ls -la | sed -n '1,200p'; exit 1
+            echo "ERROR: Missing ${DOCKERFILE}"; exit 1
           fi
-          docker build \
-            -f "${DOCKERFILE}" \
-            -t "tmp/${SVC}:build" \
-            .
+          docker build -f "${DOCKERFILE}" -t "tmp/${SVC}:build" .
 
       - name: Tag & push
         shell: bash
@@ -123,3 +134,11 @@ jobs:
           docker push "${IMAGE}:${{ steps.tags.outputs.sha }}"
           docker push "${IMAGE}:${{ steps.tags.outputs.date }}"
           docker push "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
+
+  noop-when-empty:
+    name: No Dockerfiles found (noop)
+    needs: discover
+    if: ${{ fromJson(needs.discover.outputs.count) == 0 }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No Dockerfile.* present — skipping ECR build."
