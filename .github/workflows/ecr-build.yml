@@ -22,9 +22,10 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}   # e.g., us-west-2
-  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}       # full ARN
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}   # 12-digit account id
+  # Secrets are only available on `push` from this repo. PRs (esp. from forks) won't have them.
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 jobs:
   discover:
@@ -44,30 +45,28 @@ jobs:
         run: |
           shopt -s nullglob
           files=( Dockerfile.* )
-          # Build JSON array of {"service":"X","dockerfile":"Dockerfile.X"}
           json='{"include":['
           count=0
           for f in "${files[@]}"; do
-            # service name = suffix after "Dockerfile."
             svc="${f#Dockerfile.}"
-            # Skip obvious non-services if any
-            if [[ -z "$svc" ]]; then continue; fi
+            [[ -z "$svc" ]] && continue
             [[ $count -gt 0 ]] && json+=','
             json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
             ((count++))
           done
           json+=']}'
-          echo "Discovered ${count} Dockerfiles:"
+          echo "Found ${count} Dockerfile.*:"
           printf '%s\n' "${files[@]}" | sed '/^$/d' || true
           echo "matrix=${json}" >> "$GITHUB_OUTPUT"
-          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "count=${count}"  >> "$GITHUB_OUTPUT"
           echo "---- MATRIX JSON ----"
           echo "${json}"
 
+  # IMPORTANT: Only build on push (secrets available). On PRs we skip the AWS steps.
   build:
     name: Build & Push (${{ matrix.service }})
     needs: discover
-    if: ${{ fromJson(needs.discover.outputs.count) > 0 }}
+    if: ${{ github.event_name == 'push' && fromJson(needs.discover.outputs.count) > 0 }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -81,9 +80,9 @@ jobs:
       - name: Validate AWS secrets present
         shell: bash
         run: |
-          : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION}"
+          : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION (e.g., us-west-2)}"
           : "${AWS_ROLE_ARN:?Set repo secret AWS_ROLE_ARN (full ARN)}"
-          : "${AWS_ACCOUNT_ID:?Set repo secret AWS_ACCOUNT_ID}"
+          : "${AWS_ACCOUNT_ID:?Set repo secret AWS_ACCOUNT_ID (12 digits)}"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -92,20 +91,36 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gobee-ci-${{ github.run_id }}
 
+      - name: Ensure ECR repository exists
+        shell: bash
+        env:
+          SVC: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          ACCOUNT="${AWS_ACCOUNT_ID}"
+          REGION="${AWS_REGION}"
+          REPO="${SVC}"
+          if aws ecr describe-repositories --region "$REGION" --repository-names "$REPO" >/dev/null 2>&1; then
+            echo "ECR repo exists: ${REPO}"
+          else
+            echo "Creating ECR repo: ${REPO}"
+            aws ecr create-repository --region "$REGION" --repository-name "$REPO" >/dev/null
+          fi
+
       - name: Derive tags
         id: tags
         shell: bash
         run: |
           echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
-          echo "date=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
-          echo "branch=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%Y%m%d%H%M%S)"        >> "$GITHUB_OUTPUT"
+          echo "branch=${GITHUB_REF_NAME//\//-}"   >> "$GITHUB_OUTPUT"
 
       - name: ECR login (AWS CLI)
         shell: bash
         run: |
-          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+          aws ecr get-login-password --region "${AWS_REGION}" \
             | docker login --username AWS --password-stdin \
-              "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+              "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
       - name: Build image
         shell: bash
@@ -113,9 +128,8 @@ jobs:
           DOCKERFILE: ${{ matrix.dockerfile }}
           SVC: ${{ matrix.service }}
         run: |
-          if [ ! -f "${DOCKERFILE}" ]; then
-            echo "ERROR: Missing ${DOCKERFILE}"; exit 1
-          fi
+          set -euo pipefail
+          test -f "${DOCKERFILE}" || { echo "Missing ${DOCKERFILE}"; exit 1; }
           docker build -f "${DOCKERFILE}" -t "tmp/${SVC}:build" .
 
       - name: Tag & push
@@ -123,8 +137,9 @@ jobs:
         env:
           SVC: ${{ matrix.service }}
         run: |
-          REGION="${{ env.AWS_REGION }}"
-          ACCOUNT="${{ env.AWS_ACCOUNT_ID }}"
+          set -euo pipefail
+          REGION="${AWS_REGION}"
+          ACCOUNT="${AWS_ACCOUNT_ID}"
           IMAGE="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/${SVC}"
 
           docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.sha }}"
@@ -135,10 +150,24 @@ jobs:
           docker push "${IMAGE}:${{ steps.tags.outputs.date }}"
           docker push "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
 
+  # For PRs (no secrets), we still expose the matrix and show a clear message.
+  pr-noop:
+    name: PR build skipped (no AWS secrets)
+    needs: discover
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show discovered matrix
+        run: |
+          echo "Discovered: ${{ needs.discover.outputs.count }} Dockerfile.*"
+          echo '${{ needs.discover.outputs.matrix }}' | sed -e 's/^/  /'
+          echo "Skipping ECR build on PR (secrets unavailable by design)."
+
+  # If push had zero Dockerfiles, do nothing but keep job green.
   noop-when-empty:
     name: No Dockerfiles found (noop)
     needs: discover
-    if: ${{ fromJson(needs.discover.outputs.count) == 0 }}
+    if: ${{ github.event_name == 'push' && fromJson(needs.discover.outputs.count) == 0 }}
     runs-on: ubuntu-latest
     steps:
       - run: echo "No Dockerfile.* present — skipping ECR build."
