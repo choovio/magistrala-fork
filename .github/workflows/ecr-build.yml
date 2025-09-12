@@ -1,25 +1,36 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-<<<<<<< HEAD
-# SPDX-License-Identifier: Apache-2.0
-
-name: ECR Build
+# SPDX-License-Identifier: MIT
+---
+name: ECR Build / Build and Push to ECR
 
 on:
   push:
+    branches: [ main ]
     paths:
-      - 'Dockerfile*'
       - 'cmd/**'
+      - 'Dockerfile*'
       - '.github/workflows/ecr-build.yml'
   workflow_dispatch: {}
 
+permissions:
+  id-token: write   # OIDC for AWS
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}     # set this repo secret (e.g., us-west-2)
+  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}         # full ARN, e.g., arn:aws:iam::595443389404:role/GithubActionsECRPush
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}     # 12-digit account ID
+
 jobs:
   build:
-    name: Build and Push to ECR
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Core services (map to explicit Dockerfiles)
+          - service: bootstrap
+            dockerfile: Dockerfile.bootstrap
           - service: users
             dockerfile: Dockerfile.users
           - service: things
@@ -28,10 +39,10 @@ jobs:
             dockerfile: Dockerfile.certs
           - service: domains
             dockerfile: Dockerfile.domains
-          - service: bootstrap
-            dockerfile: Dockerfile.bootstrap
           - service: provision
             dockerfile: Dockerfile.provision
+
+          # Readers/Writers (names taken from failing checks)
           - service: postgres-reader
             dockerfile: Dockerfile.postgres-reader
           - service: postgres-writer
@@ -40,44 +51,75 @@ jobs:
             dockerfile: Dockerfile.timescale-reader
           - service: timescale-writer
             dockerfile: Dockerfile.timescale-writer
+
+          # Reports & Rules (“re” from failing checks)
           - service: reports
             dockerfile: Dockerfile.reports
           - service: re
             dockerfile: Dockerfile.re
 
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Configure AWS credentials
+      - name: Validate AWS configuration
+        shell: bash
+        run: |
+          : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION}"
+          : "${AWS_ROLE_ARN:?Set repo secret AWS_ROLE_ARN (full ARN)}"
+          : "${AWS_ACCOUNT_ID:?Set repo secret AWS_ACCOUNT_ID}"
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gobee-ci-${{ github.run_id }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Amazon ECR
+      - name: Derive tags
+        id: tags
+        shell: bash
         run: |
-          aws ecr get-login-password --region "$AWS_REGION" | \
-          docker login --username AWS --password-stdin "$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+          echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "branch=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: ECR login (AWS CLI)
+        shell: bash
+        run: |
+          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+            | docker login --username AWS --password-stdin \
+              "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
 
       - name: Build image
+        shell: bash
+        env:
+          SVC: ${{ matrix.service }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
-          docker build -f "${{ matrix.dockerfile }}" -t "tmp/${{ matrix.service }}:build" .
+          if [ ! -f "${DOCKERFILE}" ]; then
+            echo "ERROR: Missing ${DOCKERFILE} for service ${SVC}"; ls -la | sed -n '1,200p'; exit 1
+          fi
+          docker build \
+            -f "${DOCKERFILE}" \
+            -t "tmp/${SVC}:build" \
+            .
 
-      - name: Push image
+      - name: Tag & push
+        shell: bash
+        env:
+          SVC: ${{ matrix.service }}
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REGISTRY="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          IMAGE="$REGISTRY/${{ matrix.service }}:${{ github.sha }}"
-          docker tag "tmp/${{ matrix.service }}:build" "$IMAGE"
-          docker push "$IMAGE"
-=======
-# SPDX-License-Identifier: MIT
-(paste the YAML above)
->>>>>>> fc4914f1 (CI: fix license headers (canonical SPDX) + normalize docker/login-action to @v3)
+          REGION="${{ env.AWS_REGION }}"
+          ACCOUNT="${{ env.AWS_ACCOUNT_ID }}"
+          IMAGE="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/${SVC}"
+
+          docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.sha }}"
+          docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.date }}"
+          docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
+
+          docker push "${IMAGE}:${{ steps.tags.outputs.sha }}"
+          docker push "${IMAGE}:${{ steps.tags.outputs.date }}"
+          docker push "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
