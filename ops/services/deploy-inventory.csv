@@ -1,0 +1,7 @@
+﻿"target","deploy_name","replicas","ready","image","container","containerPorts","args"
+"users","<absent>","","","","","",""
+"things","<absent>","","","","","",""
+"domains","<absent>","","","","","",""
+"certs","<absent>","","","","","",""
+"http-adapter","<absent>","","","","","",""
+"ws-adapter","<absent>","","","","","",""

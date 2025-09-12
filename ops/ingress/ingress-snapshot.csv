@@ -1,0 +1,7 @@
+﻿"namespace","ingress","host","path","service","port","corsEnabled","corsOrigins","corsCreds","corsMethods","corsHeaders"
+"magistrala","api-bootstrap","sbx.gobee.io","/api/bootstrap/?(.*)","bootstrap","8080","true","https://sbx.gobee.io","true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token"
+"magistrala","api-provision","sbx.gobee.io","/api/provision/?(.*)","provision","8080","true","https://sbx.gobee.io","true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token, X-Tenant-ID"
+"magistrala","api-readers","sbx.gobee.io","/api/readers/?(.*)","postgres-reader","8080","true","https://sbx.gobee.io","true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token"
+"magistrala","api-rules","sbx.gobee.io","/api/rules/?(.*)","re","8080","true","https://sbx.gobee.io","true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token"
+"magistrala","bootstrap","sbx.gobee.io","/healthz","bootstrap","8080","true",,"true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token"
+"magistrala","bootstrap","sbx.gobee.io","/","bootstrap","8080","true",,"true","GET, PUT, POST, DELETE, PATCH, OPTIONS","Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token"

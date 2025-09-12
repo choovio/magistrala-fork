@@ -1,0 +1,7 @@
+﻿"Service","Dockerfile","AllDockerfiles","ExposePort","MainPortsSeen"
+"users","C:\Users\fhdar\Documents\magistrala-fork\docker\Dockerfile","C:\Users\fhdar\Documents\magistrala-fork\docker\Dockerfile; C:\Users\fhdar\Documents\magistrala-fork\docker\Dockerfile.dev; C:\Users\fhdar\Documents\magistrala-fork\docker\supermq-docker\Dockerfile; C:\Users\fhdar\Documents\magistrala-fork\docker\supermq-docker\Dockerfile.dev",,""
+"things","","",,""
+"domains","","",,""
+"certs","","",,""
+"http-adapter","","",,""
+"ws-adapter","","",,""

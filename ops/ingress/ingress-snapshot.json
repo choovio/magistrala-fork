@@ -1,0 +1,411 @@
+﻿{
+    "apiVersion":  "v1",
+    "items":  [
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin":  "https://sbx.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/rewrite-target":  "/$1",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true",
+                                                           "nginx.ingress.kubernetes.io/use-regex":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-09-04T20:55:30Z",
+                                       "generation":  1,
+                                       "name":  "api-bootstrap",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "7593687",
+                                       "uid":  "41813fd7-e9c1-4dbc-a0ce-316d59cb0b02"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "bootstrap",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/api/bootstrap/?(.*)",
+                                                                                    "pathType":  "ImplementationSpecific"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  },
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token, X-Tenant-ID",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin":  "https://sbx.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/rewrite-target":  "/$1",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true",
+                                                           "nginx.ingress.kubernetes.io/use-regex":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-09-09T16:28:47Z",
+                                       "generation":  1,
+                                       "name":  "api-provision",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "7593776",
+                                       "uid":  "880885ae-4174-436f-9afa-6b1e0a6c9771"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "provision",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/api/provision/?(.*)",
+                                                                                    "pathType":  "ImplementationSpecific"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  },
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin":  "https://sbx.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/rewrite-target":  "/$1",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true",
+                                                           "nginx.ingress.kubernetes.io/use-regex":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-09-04T18:46:43Z",
+                                       "generation":  2,
+                                       "name":  "api-readers",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "6337476",
+                                       "uid":  "6d36d2ed-d6b9-466a-9987-efe184d751a6"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "postgres-reader",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/api/readers/?(.*)",
+                                                                                    "pathType":  "ImplementationSpecific"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  },
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin":  "https://sbx.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/rewrite-target":  "/$1",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true",
+                                                           "nginx.ingress.kubernetes.io/use-regex":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-09-04T20:42:38Z",
+                                       "generation":  1,
+                                       "name":  "api-reports",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "6343226",
+                                       "uid":  "cfc80043-bd2f-46a2-bd2c-0f3a5eb49621"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "reports",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/api/reports/?(.*)",
+                                                                                    "pathType":  "ImplementationSpecific"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  },
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin":  "https://sbx.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/rewrite-target":  "/$1",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true",
+                                                           "nginx.ingress.kubernetes.io/use-regex":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-09-04T20:30:34Z",
+                                       "generation":  1,
+                                       "name":  "api-rules",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "7593704",
+                                       "uid":  "44b89bad-9835-4384-95d5-f85d8d4c4f8c"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "re",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/api/rules/?(.*)",
+                                                                                    "pathType":  "ImplementationSpecific"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  },
+                  {
+                      "apiVersion":  "networking.k8s.io/v1",
+                      "kind":  "Ingress",
+                      "metadata":  {
+                                       "annotations":  {
+                                                           "cert-manager.io/cluster-issuer":  "letsencrypt-prod",
+                                                           "kubernetes.io/ingress.class":  "nginx",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-credentials":  "true",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-headers":  "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-methods":  "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+                                                           "nginx.ingress.kubernetes.io/cors-allow-origin-list":  "https://sbx.gobee.io,https://sandbox.gobee.io",
+                                                           "nginx.ingress.kubernetes.io/cors-max-age":  "86400",
+                                                           "nginx.ingress.kubernetes.io/enable-cors":  "true",
+                                                           "nginx.ingress.kubernetes.io/proxy-body-size":  "0",
+                                                           "nginx.ingress.kubernetes.io/ssl-redirect":  "true"
+                                                       },
+                                       "creationTimestamp":  "2025-08-27T19:04:39Z",
+                                       "generation":  4,
+                                       "name":  "bootstrap",
+                                       "namespace":  "magistrala",
+                                       "resourceVersion":  "6314931",
+                                       "uid":  "13e9e0ee-5d5a-4b0e-8fe9-5b55d453f578"
+                                   },
+                      "spec":  {
+                                   "ingressClassName":  "nginx",
+                                   "rules":  [
+                                                 {
+                                                     "host":  "sbx.gobee.io",
+                                                     "http":  {
+                                                                  "paths":  [
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "bootstrap",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/healthz",
+                                                                                    "pathType":  "Prefix"
+                                                                                },
+                                                                                {
+                                                                                    "backend":  {
+                                                                                                    "service":  {
+                                                                                                                    "name":  "bootstrap",
+                                                                                                                    "port":  {
+                                                                                                                                 "number":  8080
+                                                                                                                             }
+                                                                                                                }
+                                                                                                },
+                                                                                    "path":  "/",
+                                                                                    "pathType":  "Prefix"
+                                                                                }
+                                                                            ]
+                                                              }
+                                                 }
+                                             ],
+                                   "tls":  [
+                                               {
+                                                   "hosts":  [
+                                                                 "sbx.gobee.io"
+                                                             ],
+                                                   "secretName":  "sbx-gobee-io-tls"
+                                               }
+                                           ]
+                               },
+                      "status":  {
+                                     "loadBalancer":  {
+                                                          "ingress":  [
+                                                                          {
+                                                                              "hostname":  "ad27663c3d26f424c895bc36bd89fb38-640070812.us-west-2.elb.amazonaws.com"
+                                                                          }
+                                                                      ]
+                                                      }
+                                 }
+                  }
+              ],
+    "kind":  "List",
+    "metadata":  {
+                     "resourceVersion":  ""
+                 }
+}

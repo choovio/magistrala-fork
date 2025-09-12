@@ -1,0 +1,2 @@
+﻿"deploy","image","replicas","ready"
+"bootstrap","595443389404.dkr.ecr.us-west-2.amazonaws.com/magistrala:bootstrap-826865e","1","1"

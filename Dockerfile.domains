@@ -1,4 +1,11 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+<<<<<<< HEAD
+=======
+# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 CHOOVIO Inc.
+
+>>>>>>> fc4914f1 (CI: fix license headers (canonical SPDX) + normalize docker/login-action to @v3)
 # SPDX-License-Identifier: Apache-2.0
 # syntax=docker/dockerfile:1.7
 
