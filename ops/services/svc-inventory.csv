@@ -1,7 +1,0 @@
-﻿"target","svc_name","cluster_ip","port_name","port","targetPort","protocol","type"
-"users","<absent>","","","","","",""
-"things","<absent>","","","","","",""
-"domains","<absent>","","","","","",""
-"certs","<absent>","","","","","",""
-"http-adapter","<absent>","","","","","",""
-"ws-adapter","<absent>","","","","","",""
