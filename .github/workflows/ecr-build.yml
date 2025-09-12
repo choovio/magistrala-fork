@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
-# ci-touch: 2025-09-12T11:41:59-07:00
 ---
 name: ECR Build / Build and Push to ECR (core-only)
 
@@ -8,14 +7,14 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'Dockerfile*'
-      - 'cmd/**'
-      - '.github/workflows/ecr-build.yml'
+      - "Dockerfile*"
+      - "cmd/**"
+      - ".github/workflows/ecr-build.yml"
   pull_request:
     paths:
-      - 'Dockerfile*'
-      - 'cmd/**'
-      - '.github/workflows/ecr-build.yml'
+      - "Dockerfile*"
+      - "cmd/**"
+      - ".github/workflows/ecr-build.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -27,11 +26,9 @@ env:
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
-# We dynamically discover Dockerfile.* but KEEP ONLY a safe allowlist of core services.
-# This avoids failing on optional readers/writers that aren’t ready yet.
 jobs:
   discover:
-    name: Discover Dockerfiles → matrix (filtered)
+    name: Discover Dockerfiles ? matrix (filtered)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.mk.outputs.matrix }}
@@ -39,7 +36,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+        with:
+          fetch-depth: 1
 
       - name: Build filtered matrix
         id: mk
@@ -48,32 +46,16 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           files=( Dockerfile.* )
-
-          # Allow only core services for now (expand later when stable)
           allow=( bootstrap users things certs domains provision reports re )
-
-          declare -A ok=()
-          for a in "${allow[@]}"; do ok["$a"]=1; done
-
-          json='{"include":['
-          count=0
+          declare -A ok=(); for a in "${allow[@]}"; do ok["$a"]=1; done
+          json='{"include":['; count=0
           for f in "${files[@]}"; do
-            svc="${f#Dockerfile.}"
-            [[ -z "$svc" ]] && continue
+            svc="${f#Dockerfile.}"; [[ -z "$svc" ]] && continue
             [[ -n "${ok[$svc]:-}" ]] || continue
             [[ $count -gt 0 ]] && json+=','
-            json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
-            ((count++))
+            json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"; ((count++))
           done
           json+=']}'
-
-          echo "All Dockerfiles found:"
-          printf '  %s\n' "${files[@]}" | sed '/^$/d' || true
-          echo "Allowed services:"
-          printf '  %s\n' "${allow[@]}"
-          echo "Selected (${count}) for build:"
-          echo "${json}"
-
           echo "matrix=${json}" >> "$GITHUB_OUTPUT"
           echo "count=${count}"  >> "$GITHUB_OUTPUT"
 
@@ -85,11 +67,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+        with:
+          fetch-depth: 1
 
       - name: Validate AWS secrets present
         shell: bash
@@ -107,12 +89,12 @@ jobs:
 
       - name: Ensure ECR repository exists
         shell: bash
-        env: { SVC: ${{ matrix.service }} }
+        env:
+          SVC: ${{ matrix.service }}
         run: |
           set -euo pipefail
           aws ecr describe-repositories --region "${AWS_REGION}" --repository-names "${SVC}" >/dev/null 2>&1 \
             || aws ecr create-repository --region "${AWS_REGION}" --repository-name "${SVC}" >/dev/null
-          echo "ECR repo ready: ${SVC}"
 
       - name: Derive tags
         id: tags
@@ -125,8 +107,8 @@ jobs:
       - name: ECR login (AWS CLI)
         shell: bash
         run: |
-          aws ecr get-login-password --region "${AWS_REGION}" \
-            | docker login --username AWS --password-stdin \
+          aws ecr get-login-password --region "${AWS_REGION}" |
+            docker login --username AWS --password-stdin \
               "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
       - name: Build image
@@ -137,12 +119,12 @@ jobs:
         run: |
           set -euo pipefail
           test -f "${DOCKERFILE}" || { echo "Missing ${DOCKERFILE}"; exit 1; }
-          echo "Building ${SVC} with ${DOCKERFILE}"
           docker build -f "${DOCKERFILE}" -t "tmp/${SVC}:build" .
 
       - name: Tag & push
         shell: bash
-        env: { SVC: ${{ matrix.service }} }
+        env:
+          SVC: ${{ matrix.service }}
         run: |
           set -euo pipefail
           IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SVC}"
@@ -169,4 +151,4 @@ jobs:
     if: ${{ github.event_name == 'push' && fromJson(needs.discover.outputs.count) == 0 }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "No core Dockerfiles discovered — skipping."
+      - run: echo "No core Dockerfiles discovered � skipping."

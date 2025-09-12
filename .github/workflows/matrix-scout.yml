@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
-# ci-touch: 2025-09-12T11:41:59-07:00
 ---
 name: Matrix Scout (no-build sanity)
 
@@ -9,8 +8,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '.github/workflows/matrix-scout.yml'
-      - 'ops/matrix/**'
+      - ".github/workflows/matrix-scout.yml"
+      - "ops/matrix/**"
 
 permissions:
   contents: read
@@ -27,59 +26,44 @@ jobs:
       - name: Ensure ops/matrix/matrix.json exists (generate if missing)
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p ops/matrix
           if [ ! -f ops/matrix/matrix.json ]; then
-            cat > ops/matrix/matrix.json <<'JSON'
-            {
-              "version": 1,
-              "services": [
-                { "service": "bootstrap",         "dockerfile": "Dockerfile.bootstrap" },
-                { "service": "users",             "dockerfile": "Dockerfile.users" },
-                { "service": "things",            "dockerfile": "Dockerfile.things" },
-                { "service": "certs",             "dockerfile": "Dockerfile.certs" },
-                { "service": "domains",           "dockerfile": "Dockerfile.domains" },
-                { "service": "provision",         "dockerfile": "Dockerfile.provision" },
-                { "service": "postgres-reader",   "dockerfile": "Dockerfile.postgres-reader" },
-                { "service": "postgres-writer",   "dockerfile": "Dockerfile.postgres-writer" },
-                { "service": "timescale-reader",  "dockerfile": "Dockerfile.timescale-reader" },
-                { "service": "timescale-writer",  "dockerfile": "Dockerfile.timescale-writer" },
-                { "service": "reports",           "dockerfile": "Dockerfile.reports" },
-                { "service": "re",                "dockerfile": "Dockerfile.re" }
-              ]
-            }
-            JSON
+            printf '%s\n' '{' \
+              '  "version": 1,' \
+              '  "services": [' \
+              '    { "service": "bootstrap", "dockerfile": "Dockerfile.bootstrap" },' \
+              '    { "service": "users",     "dockerfile": "Dockerfile.users" },' \
+              '    { "service": "things",    "dockerfile": "Dockerfile.things" },' \
+              '    { "service": "certs",     "dockerfile": "Dockerfile.certs" },' \
+              '    { "service": "domains",   "dockerfile": "Dockerfile.domains" },' \
+              '    { "service": "provision", "dockerfile": "Dockerfile.provision" },' \
+              '    { "service": "reports",   "dockerfile": "Dockerfile.reports" },' \
+              '    { "service": "re",        "dockerfile": "Dockerfile.re" }' \
+              '  ]' \
+              '}' > ops/matrix/matrix.json
             echo "Generated ops/matrix/matrix.json"
           else
             echo "Found existing ops/matrix/matrix.json"
           fi
-          echo
           echo "---- matrix.json ----"
           sed -n '1,200p' ops/matrix/matrix.json
 
-      - name: Validate schema (lightweight)
+      - name: Validate schema
         shell: bash
         run: |
           python3 - <<'PY'
           import json, sys
-          p = 'ops/matrix/matrix.json'
-          try:
-              data = json.load(open(p))
-          except Exception as e:
-              print(f"Invalid JSON in {p}: {e}")
-              sys.exit(1)
-          # minimal schema: version:int, services:list of {service, dockerfile}
-          if not isinstance(data.get('version'), int):
-              print("matrix.json: 'version' must be an integer"); sys.exit(1)
-          svcs = data.get('services')
-          if not isinstance(svcs, list) or not svcs:
-              print("matrix.json: 'services' must be a non-empty list"); sys.exit(1)
-          bad = [s for s in svcs if not isinstance(s, dict) or 'service' not in s or 'dockerfile' not in s]
-          if bad:
-              print(f"matrix.json: entries missing required keys: {bad}"); sys.exit(1)
-          print("matrix.json schema looks OK.")
+          p='ops/matrix/matrix.json'
+          try: data=json.load(open(p))
+          except Exception as e: print(f"Invalid JSON: {e}"); sys.exit(1)
+          assert isinstance(data.get('version'), int)
+          svcs=data.get('services'); assert isinstance(svcs, list) and svcs
+          for s in svcs: assert isinstance(s, dict) and 'service' in s and 'dockerfile' in s
+          print("matrix.json OK.")
           PY
 
-      - name: Upload matrix.json artifact
+      - name: Upload matrix.json
         uses: actions/upload-artifact@v4
         with:
           name: matrix.json

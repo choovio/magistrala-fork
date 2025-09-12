@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
-# ci-touch: 2025-09-12T11:41:59-07:00
 ---
 name: Sources JSON Artifact
 
@@ -9,8 +8,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '.github/workflows/sources-artifact.yml'
-      - 'ops/sources/**'
+      - ".github/workflows/sources-artifact.yml"
+      - "ops/sources/**"
 
 permissions:
   contents: read
@@ -27,58 +26,44 @@ jobs:
       - name: Ensure ops/sources/sources.json exists (generate if missing)
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p ops/sources
           if [ ! -f ops/sources/sources.json ]; then
-            cat > ops/sources/sources.json <<'JSON'
-            {
-              "version": 1,
-              "sources": [
-                { "name": "bootstrap", "path": "cmd/bootstrap" },
-                { "name": "users",     "path": "cmd/users" },
-                { "name": "things",    "path": "cmd/things" },
-                { "name": "certs",     "path": "cmd/certs" },
-                { "name": "domains",   "path": "cmd/domains" },
-                { "name": "provision", "path": "cmd/provision" },
-                { "name": "reports",   "path": "cmd/reports" },
-                { "name": "re",        "path": "cmd/re" },
-                { "name": "postgres-reader",  "path": "cmd/postgres-reader" },
-                { "name": "postgres-writer",  "path": "cmd/postgres-writer" },
-                { "name": "timescale-reader", "path": "cmd/timescale-reader" },
-                { "name": "timescale-writer", "path": "cmd/timescale-writer" }
-              ]
-            }
-            JSON
+            printf '%s\n' '{' \
+              '  "version": 1,' \
+              '  "sources": [' \
+              '    { "name": "bootstrap", "path": "cmd/bootstrap" },' \
+              '    { "name": "users",     "path": "cmd/users" },' \
+              '    { "name": "things",    "path": "cmd/things" },' \
+              '    { "name": "certs",     "path": "cmd/certs" },' \
+              '    { "name": "domains",   "path": "cmd/domains" },' \
+              '    { "name": "provision", "path": "cmd/provision" },' \
+              '    { "name": "reports",   "path": "cmd/reports" },' \
+              '    { "name": "re",        "path": "cmd/re" }' \
+              '  ]' \
+              '}' > ops/sources/sources.json
             echo "Generated ops/sources/sources.json"
           else
             echo "Found existing ops/sources/sources.json"
           fi
-          echo
           echo "---- sources.json ----"
           sed -n '1,200p' ops/sources/sources.json
 
-      - name: Validate schema (lightweight)
+      - name: Validate schema
         shell: bash
         run: |
           python3 - <<'PY'
           import json, sys
-          p = 'ops/sources/sources.json'
-          try:
-              data = json.load(open(p))
-          except Exception as e:
-              print(f"Invalid JSON in {p}: {e}")
-              sys.exit(1)
-          if not isinstance(data.get('version'), int):
-              print("sources.json: 'version' must be an integer"); sys.exit(1)
-          svcs = data.get('sources')
-          if not isinstance(svcs, list) or not svcs:
-              print("sources.json: 'sources' must be a non-empty list"); sys.exit(1)
-          bad = [s for s in svcs if not isinstance(s, dict) or 'name' not in s or 'path' not in s]
-          if bad:
-              print(f"sources.json: entries missing required keys: {bad}"); sys.exit(1)
-          print("sources.json schema looks OK.")
+          p='ops/sources/sources.json'
+          try: data=json.load(open(p))
+          except Exception as e: print(f"Invalid JSON: {e}"); sys.exit(1)
+          assert isinstance(data.get('version'), int)
+          src=data.get('sources'); assert isinstance(src, list) and src
+          for s in src: assert isinstance(s, dict) and 'name' in s and 'path' in s
+          print("sources.json OK.")
           PY
 
-      - name: Upload sources.json artifact
+      - name: Upload sources.json
         uses: actions/upload-artifact@v4
         with:
           name: sources.json

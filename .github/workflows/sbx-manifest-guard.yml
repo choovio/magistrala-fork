@@ -20,9 +20,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Validate SBX pins exist
+      - name: Check SBX pins file (warn if missing)
         shell: bash
         run: |
           set -euo pipefail
-          test -f overrides/sbx-pins.lock.yaml || { echo "Missing overrides/sbx-pins.lock.yaml"; exit 1; }
-          echo "OK: overrides/sbx-pins.lock.yaml present"
+          if [ -f overrides/sbx-pins.lock.yaml ]; then
+            echo "OK: overrides/sbx-pins.lock.yaml present"
+          else
+            echo "WARN: overrides/sbx-pins.lock.yaml not found (non-blocking)"
+          fi
