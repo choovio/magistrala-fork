@@ -92,7 +92,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ startsWith(env.AWS_ROLE_ARN, 'arn:aws:iam::') && env.AWS_ROLE_ARN || format('arn:aws:iam::{0}:role/{1}', env.AWS_ACCOUNT_ID, env.AWS_ROLE_ARN) }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gobee-ci-${{ github.run_id }}
 
