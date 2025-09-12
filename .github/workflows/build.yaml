@@ -4,8 +4,7 @@
 name: Continuous Delivery
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-and-push:
@@ -13,17 +12,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # needed to push to ghcr.io with GITHUB_TOKEN
+      packages: write   # required for GHCR push with GITHUB_TOKEN
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_OWNER: ${{ github.repository_owner }}
+      IMAGE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/magistrala
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # ensures tags are available (alternative to unshallow)
+        with: { fetch-depth: 0 }
 
       - name: Fetch tags for the build
-        run: |
-          git fetch --prune --tags
+        run: git fetch --prune --tags
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -32,8 +33,7 @@ jobs:
           cache-dependency-path: "go.sum"
 
       - name: Run tests
-        run: |
-          make test
+        run: make test
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -54,7 +54,7 @@ jobs:
 
       - name: Build and push Dockers
         run: |
-          make latest -j $(nproc)
+          make latest IMAGE_PREFIX="${IMAGE_PREFIX}" -j "$(nproc)"
 
       - name: Trigger Helm Chart Deployment
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
