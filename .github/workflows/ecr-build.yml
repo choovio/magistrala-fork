@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
 ---
-name: ECR Build / Build and Push to ECR (dynamic)
+name: ECR Build / Build and Push to ECR (core-only)
 
 on:
   push:
@@ -18,51 +18,64 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  id-token: write   # for AWS OIDC
+  id-token: write
   contents: read
 
 env:
-  # Secrets are only available on `push` from this repo. PRs (esp. from forks) won't have them.
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
+# We dynamically discover Dockerfile.* but KEEP ONLY a safe allowlist of core services.
+# This avoids failing on optional readers/writers that aren’t ready yet.
 jobs:
   discover:
-    name: Discover Dockerfiles → matrix
+    name: Discover Dockerfiles → matrix (filtered)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.mk.outputs.matrix }}
-      count: ${{ steps.mk.outputs.count }}
+      count:  ${{ steps.mk.outputs.count }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with: { fetch-depth: 1 }
 
-      - name: Find Dockerfile.* and build matrix JSON
+      - name: Build filtered matrix
         id: mk
         shell: bash
         run: |
+          set -euo pipefail
           shopt -s nullglob
           files=( Dockerfile.* )
+
+          # Allow only core services for now (expand later when stable)
+          allow=( bootstrap users things certs domains provision reports re )
+
+          declare -A ok=()
+          for a in "${allow[@]}"; do ok["$a"]=1; done
+
           json='{"include":['
           count=0
           for f in "${files[@]}"; do
             svc="${f#Dockerfile.}"
             [[ -z "$svc" ]] && continue
+            [[ -n "${ok[$svc]:-}" ]] || continue
             [[ $count -gt 0 ]] && json+=','
             json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
             ((count++))
           done
           json+=']}'
-          echo "Found ${count} Dockerfile.*:"
-          printf '%s\n' "${files[@]}" | sed '/^$/d' || true
-          echo "matrix=${json}" >> "$GITHUB_OUTPUT"
-          echo "count=${count}"  >> "$GITHUB_OUTPUT"
-          echo "---- MATRIX JSON ----"
+
+          echo "All Dockerfiles found:"
+          printf '  %s\n' "${files[@]}" | sed '/^$/d' || true
+          echo "Allowed services:"
+          printf '  %s\n' "${allow[@]}"
+          echo "Selected (${count}) for build:"
           echo "${json}"
 
-  # IMPORTANT: Only build on push (secrets available). On PRs we skip the AWS steps.
+          echo "matrix=${json}" >> "$GITHUB_OUTPUT"
+          echo "count=${count}"  >> "$GITHUB_OUTPUT"
+
   build:
     name: Build & Push (${{ matrix.service }})
     needs: discover
@@ -80,9 +93,9 @@ jobs:
       - name: Validate AWS secrets present
         shell: bash
         run: |
-          : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION (e.g., us-west-2)}"
+          : "${AWS_REGION:?Set repo secret AWS_DEFAULT_REGION}"
           : "${AWS_ROLE_ARN:?Set repo secret AWS_ROLE_ARN (full ARN)}"
-          : "${AWS_ACCOUNT_ID:?Set repo secret AWS_ACCOUNT_ID (12 digits)}"
+          : "${AWS_ACCOUNT_ID:?Set repo secret AWS_ACCOUNT_ID}"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -93,19 +106,12 @@ jobs:
 
       - name: Ensure ECR repository exists
         shell: bash
-        env:
-          SVC: ${{ matrix.service }}
+        env: { SVC: ${{ matrix.service }} }
         run: |
           set -euo pipefail
-          ACCOUNT="${AWS_ACCOUNT_ID}"
-          REGION="${AWS_REGION}"
-          REPO="${SVC}"
-          if aws ecr describe-repositories --region "$REGION" --repository-names "$REPO" >/dev/null 2>&1; then
-            echo "ECR repo exists: ${REPO}"
-          else
-            echo "Creating ECR repo: ${REPO}"
-            aws ecr create-repository --region "$REGION" --repository-name "$REPO" >/dev/null
-          fi
+          aws ecr describe-repositories --region "${AWS_REGION}" --repository-names "${SVC}" >/dev/null 2>&1 \
+            || aws ecr create-repository --region "${AWS_REGION}" --repository-name "${SVC}" >/dev/null
+          echo "ECR repo ready: ${SVC}"
 
       - name: Derive tags
         id: tags
@@ -126,48 +132,40 @@ jobs:
         shell: bash
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
-          SVC: ${{ matrix.service }}
+          SVC:        ${{ matrix.service }}
         run: |
           set -euo pipefail
           test -f "${DOCKERFILE}" || { echo "Missing ${DOCKERFILE}"; exit 1; }
+          echo "Building ${SVC} with ${DOCKERFILE}"
           docker build -f "${DOCKERFILE}" -t "tmp/${SVC}:build" .
 
       - name: Tag & push
         shell: bash
-        env:
-          SVC: ${{ matrix.service }}
+        env: { SVC: ${{ matrix.service }} }
         run: |
           set -euo pipefail
-          REGION="${AWS_REGION}"
-          ACCOUNT="${AWS_ACCOUNT_ID}"
-          IMAGE="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/${SVC}"
-
+          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SVC}"
           docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.sha }}"
           docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.date }}"
           docker tag "tmp/${SVC}:build" "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
-
           docker push "${IMAGE}:${{ steps.tags.outputs.sha }}"
           docker push "${IMAGE}:${{ steps.tags.outputs.date }}"
           docker push "${IMAGE}:${{ steps.tags.outputs.branch }}-latest"
 
-  # For PRs (no secrets), we still expose the matrix and show a clear message.
   pr-noop:
     name: PR build skipped (no AWS secrets)
     needs: discover
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Show discovered matrix
-        run: |
-          echo "Discovered: ${{ needs.discover.outputs.count }} Dockerfile.*"
-          echo '${{ needs.discover.outputs.matrix }}' | sed -e 's/^/  /'
-          echo "Skipping ECR build on PR (secrets unavailable by design)."
+      - run: |
+          echo "Skipping ECR push on PR (no secrets)."
+          echo "Matrix: ${{ needs.discover.outputs.matrix }}"
 
-  # If push had zero Dockerfiles, do nothing but keep job green.
   noop-when-empty:
-    name: No Dockerfiles found (noop)
+    name: No eligible Dockerfiles found (noop)
     needs: discover
     if: ${{ github.event_name == 'push' && fromJson(needs.discover.outputs.count) == 0 }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "No Dockerfile.* present — skipping ECR build."
+      - run: echo "No core Dockerfiles discovered — skipping."
