@@ -1,11 +1,5 @@
-﻿# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 name: Matrix Scout (no-build sanity)
 
@@ -67,7 +61,7 @@ jobs:
           printf "%-14s | %-28s | %-22s | %-9s | %-10s\n" "service" "dockerfile" "context" "unresolved" "port"
           printf -- "-------------------------------------------------------------------------------------------------\n"
 
-          # IMPORTANT: no pipe â†’ no subshell; FAIL/UNRES persist
+          # IMPORTANT: no pipe → no subshell; FAIL/UNRES persist
           while IFS= read -r row; do
             name=$(jq -r '.name' <<<"$row")
             dockerfile=$(jq -r '.dockerfile' <<<"$row")
@@ -78,11 +72,11 @@ jobs:
             notes=$(jq -r '.notes // ""' <<<"$row")
 
             if [[ -n "$dockerfile" && ! -f "$dockerfile" ]]; then
-              echo "::error title=Missing dockerfile::$name â†’ $dockerfile not found"
+              echo "::error title=Missing dockerfile::$name → $dockerfile not found"
               FAIL=1
             fi
             if [[ -n "$context" && "$context" != "." && ! -d "$context" ]]; then
-              echo "::error title=Missing context::$name â†’ $context not found"
+              echo "::error title=Missing context::$name → $context not found"
               FAIL=1
             fi
             if [[ -n "$target" ]]; then

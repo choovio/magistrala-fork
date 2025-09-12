@@ -1,7 +1,4 @@
-﻿# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# Copyright (c) 2025 Choovio Inc.
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 name: SBX Manifest Guard
@@ -13,6 +10,7 @@ on:
       - "ops/sbx/*.yaml"
       - "ops/matrix/sources.json"
   workflow_dispatch: {}
+
 jobs:
   guard:
     name: Validate SBX manifests vs sources.json
@@ -94,5 +92,3 @@ jobs:
             exit 1
           fi
           echo "SBX Manifest Guard OK."
-
-

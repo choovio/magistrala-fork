@@ -1,11 +1,6 @@
-﻿# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
-# Copyright (c) 2025 Choovio Inc.
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+
 name: Sources JSON Artifact
 
 on:

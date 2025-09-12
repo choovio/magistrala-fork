@@ -1,1 +1,78 @@
-﻿(paste the YAML above)
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: ECR Build
+
+on:
+  push:
+    paths:
+      - 'Dockerfile*'
+      - 'cmd/**'
+      - '.github/workflows/ecr-build.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build and Push to ECR
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: users
+            dockerfile: Dockerfile.users
+          - service: things
+            dockerfile: Dockerfile.things
+          - service: certs
+            dockerfile: Dockerfile.certs
+          - service: domains
+            dockerfile: Dockerfile.domains
+          - service: bootstrap
+            dockerfile: Dockerfile.bootstrap
+          - service: provision
+            dockerfile: Dockerfile.provision
+          - service: postgres-reader
+            dockerfile: Dockerfile.postgres-reader
+          - service: postgres-writer
+            dockerfile: Dockerfile.postgres-writer
+          - service: timescale-reader
+            dockerfile: Dockerfile.timescale-reader
+          - service: timescale-writer
+            dockerfile: Dockerfile.timescale-writer
+          - service: reports
+            dockerfile: Dockerfile.reports
+          - service: re
+            dockerfile: Dockerfile.re
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | \
+          docker login --username AWS --password-stdin "$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+      - name: Build image
+        run: |
+          docker build -f "${{ matrix.dockerfile }}" -t "tmp/${{ matrix.service }}:build" .
+
+      - name: Push image
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          IMAGE="$REGISTRY/${{ matrix.service }}:${{ github.sha }}"
+          docker tag "tmp/${{ matrix.service }}:build" "$IMAGE"
+          docker push "$IMAGE"
