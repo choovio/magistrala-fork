@@ -39,25 +39,30 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build filtered matrix
+      - name: Build filtered matrix (robust)
         id: mk
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           shopt -s nullglob
           files=( Dockerfile.* )
-          allow=( bootstrap users things certs domains provision reports re )
-          declare -A ok=(); for a in "${allow[@]}"; do ok["$a"]=1; done
+          allow_re='^(bootstrap|users|things|certs|domains|provision|reports|re)$'
           json='{"include":['; count=0
           for f in "${files[@]}"; do
-            svc="${f#Dockerfile.}"; [[ -z "$svc" ]] && continue
-            [[ -n "${ok[$svc]:-}" ]] || continue
-            [[ $count -gt 0 ]] && json+=','
-            json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"; ((count++))
+            svc="${f#Dockerfile.}"
+            [[ -z "$svc" ]] && continue
+            if [[ "$svc" =~ $allow_re ]]; then
+              [[ $count -gt 0 ]] && json+=','
+              json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
+              ((count++))
+            fi
           done
           json+=']}'
           echo "matrix=${json}" >> "$GITHUB_OUTPUT"
           echo "count=${count}"  >> "$GITHUB_OUTPUT"
+          echo "Discovered files: ${files[*]:-<none>}"
+          echo "Selected count: $count"
+          echo "$json"
 
   build:
     name: Build & Push (${{ matrix.service }})
