@@ -1,3 +1,4 @@
+# Copyright (c) Abstract Machines
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
 ---
@@ -39,30 +40,33 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Build filtered matrix (robust)
+      - name: Build filtered matrix (python, robust)
         id: mk
         shell: bash
         run: |
-          set -eo pipefail
-          shopt -s nullglob
-          files=( Dockerfile.* )
-          allow_re='^(bootstrap|users|things|certs|domains|provision|reports|re)$'
-          json='{"include":['; count=0
-          for f in "${files[@]}"; do
-            svc="${f#Dockerfile.}"
-            [[ -z "$svc" ]] && continue
-            if [[ "$svc" =~ $allow_re ]]; then
-              [[ $count -gt 0 ]] && json+=','
-              json+="{\"service\":\"${svc}\",\"dockerfile\":\"${f}\"}"
-              ((count++))
-            fi
-          done
-          json+=']}'
-          echo "matrix=${json}" >> "$GITHUB_OUTPUT"
-          echo "count=${count}"  >> "$GITHUB_OUTPUT"
-          echo "Discovered files: ${files[*]:-<none>}"
-          echo "Selected count: $count"
-          echo "$json"
+          python3 - <<'PY'
+          import glob, json, os, re, sys
+          files = glob.glob('Dockerfile.*')
+          allow = re.compile(r'^(bootstrap|users|things|certs|domains|provision|reports|re)$')
+          include = []
+          for f in files:
+            parts = f.split('.', 1)
+            svc = parts[1] if len(parts) == 2 else ''
+            if svc and allow.match(svc):
+              include.append({'service': svc, 'dockerfile': f})
+          matrix = {'include': include}
+          out = os.environ.get('GITHUB_OUTPUT')
+          if not out:
+            print("No GITHUB_OUTPUT; printing for debug:", file=sys.stderr)
+            print("matrix=", json.dumps(matrix), sep='')
+            print("count=", len(include), sep='')
+            sys.exit(0)
+          with open(out, 'a', encoding='utf-8') as fh:
+            fh.write(f"matrix={json.dumps(matrix)}\n")
+            fh.write(f"count={len(include)}\n")
+          print("Discovered files:", files)
+          print("Selected include:", include)
+          PY
 
   build:
     name: Build & Push (${{ matrix.service }})
