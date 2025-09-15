@@ -1,9 +1,15 @@
 # Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
-REGISTRY ?= ghcr.io
-ORG      ?= $(if $(OWNER),$(OWNER),choovio)
-IMAGE_PREFIX ?= $(REGISTRY)/$(ORG)/magistrala
+REGISTRY ?= $(shell sed -n 's/^REGISTRY=//p' ops/ci/registry.env)
+ORG ?= $(shell sed -n 's/^ORG=//p' ops/ci/registry.env)
+IMAGE_PREFIX ?= $(shell sed -n 's/^IMAGE_PREFIX=//p' ops/ci/registry.env)
+
+define IMG
+$(REGISTRY)/$(if $(ORG),$(ORG)/,)$(IMAGE_PREFIX)$(if $(1),/$(1),)
+endef
+
+IMAGE_REPO := $(strip $(call IMG))
 BUILD_DIR = build
 SERVICES ?= bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports
 DOCKERS = $(addprefix docker_,$(SERVICES))
@@ -58,7 +64,7 @@ define make_docker
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg TIME=$(TIME) \
-		--tag=$(IMAGE_PREFIX)/$(svc) \
+                --tag=$(strip $(call IMG,$(svc))) \
 		-f docker/Dockerfile .
 endef
 
@@ -68,7 +74,7 @@ define make_docker_dev
 	docker build \
 		--no-cache \
 		--build-arg SVC=$(svc) \
-		--tag=$(IMAGE_PREFIX)/$(svc) \
+                --tag=$(strip $(call IMG,$(svc))) \
 		-f docker/Dockerfile.dev ./build
 endef
 
@@ -98,7 +104,7 @@ FILTERED_SERVICES = $(filter-out $(RUN_ADDON_ARGS), $(SERVICES))
 
 all: $(SERVICES)
 
-.PHONY: all $(SERVICES) dockers dockers_dev latest release run run_addons grpc_mtls_certs check_mtls check_certs test_api mocks
+.PHONY: all $(SERVICES) dockers dockers_dev build push digest latest release run run_addons grpc_mtls_certs check_mtls check_certs test_api mocks
 
 clean:
 	rm -rf ${BUILD_DIR}
@@ -109,7 +115,7 @@ cleandocker:
 
 ifdef pv
 	# Remove unused volumes
-	docker volume ls -f name=$(IMAGE_PREFIX) -f dangling=true -q | xargs -r docker volume rm
+        docker volume ls -f name=$(IMAGE_REPO) -f dangling=true -q | xargs -r docker volume rm
 endif
 
 install:
@@ -195,9 +201,51 @@ $(DOCKERS_DEV):
 dockers: $(DOCKERS)
 dockers_dev: $(DOCKERS_DEV)
 
+build:
+	@if [ -z "$(SERVICE)" ]; then \
+	echo "SERVICE is required"; \
+	exit 1; \
+	fi; \
+	if ! echo "$(SERVICES)" | tr ' ' '\n' | grep -Fxq "$(SERVICE)"; then \
+	echo "Unknown service: $(SERVICE)"; \
+	echo "Available services: $(SERVICES)"; \
+	exit 1; \
+	fi; \
+	tag=$(SERVICE)-$$(git rev-parse --short HEAD); \
+	$(MAKE) docker_$(SERVICE); \
+	docker tag $(strip $(call IMG,$(SERVICE))) $(strip $(call IMG,$(SERVICE))):$$tag
+
+push:
+	@if [ -z "$(SERVICE)" ]; then \
+	echo "SERVICE is required"; \
+	exit 1; \
+	fi; \
+	if ! echo "$(SERVICES)" | tr ' ' '\n' | grep -Fxq "$(SERVICE)"; then \
+	echo "Unknown service: $(SERVICE)"; \
+	echo "Available services: $(SERVICES)"; \
+	exit 1; \
+	fi; \
+	tag=$(SERVICE)-$$(git rev-parse --short HEAD); \
+	docker push $(strip $(call IMG,$(SERVICE))):$$tag
+
+digest:
+	@if [ -z "$(SERVICE)" ]; then \
+	echo "SERVICE is required"; \
+	exit 1; \
+	fi; \
+	if ! echo "$(SERVICES)" | tr ' ' '\n' | grep -Fxq "$(SERVICE)"; then \
+	echo "Unknown service: $(SERVICE)"; \
+	echo "Available services: $(SERVICES)"; \
+	exit 1; \
+	fi; \
+	tag=$(SERVICE)-$$(git rev-parse --short HEAD); \
+	img=$(strip $(call IMG,$(SERVICE))):$$tag; \
+	docker pull $$img >/dev/null; \
+	docker inspect --format='{{index .RepoDigests 0}}' $$img
+
 define docker_push
 	for svc in $(SERVICES); do \
-		docker push $(IMAGE_PREFIX)/$$svc:$(1); \
+		docker push $(strip $(call IMG,$$svc)):$(1); \
 	done
 endef
 
@@ -212,7 +260,7 @@ release:
 	git checkout $(version)
 	$(MAKE) dockers
 	for svc in $(SERVICES); do \
-		docker tag $(IMAGE_PREFIX)/$$svc $(IMAGE_PREFIX)/$$svc:$(version); \
+                docker tag $(strip $(call IMG,$$svc)) $(strip $(call IMG,$$svc)):$(version); \
 	done
 	$(call docker_push,$(version))
 
