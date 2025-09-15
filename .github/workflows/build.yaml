@@ -1,12 +1,13 @@
+# Copyright (c) Abstract Machines
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
+# SPDX-License-Identifier: Apache-2.0
 
 name: Continuous Delivery
-
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-and-push:
@@ -14,32 +15,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # <-- required to push to GHCR with GITHUB_TOKEN
+      packages: write   # required to push to GHCR with GITHUB_TOKEN
 
     env:
-      REGISTRY: ghcr.io
-      ORG: ${{ github.repository_owner }}
+      OWNER: ${{ github.repository_owner }}
       IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/magistrala
-      # If your Makefile expects SERVICES, set it here; otherwise remove this line.
-      SERVICES: bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports
+      SERVICES: "bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Fetch tags for the build
-        run: |
-          git fetch --prune --unshallow --tags || true
+        run: git fetch --prune --tags
 
       - name: Install Go
         uses: actions/setup-go@v5
         with:
           go-version: 1.24.x
-          cache-dependency-path: "go.sum"
+          cache-dependency-path: go.sum
 
       - name: Run tests
-        run: |
-          make test
+        run: make test
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -48,23 +47,42 @@ jobs:
           files: ./coverage/*.out
           verbose: true
 
-      - name: Set up Docker Build
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR (via GITHUB_TOKEN)
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Dockers
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          ORG: ${{ env.ORG }}
-          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
-          SERVICES: ${{ env.SERVICES }}
-        run: |
-          # Ensure Makefile picks up our vars; remove SERVICES if your Makefile does not use it.
-          export REGISTRY ORG IMAGE_PREFIX SERVICES
-          make latest -j "$(nproc)"
+      # Build with whatever tags the Makefile currently produces (may still tag absmach)
+      - name: Build (legacy tags OK)
+        run: make latest -j "$(nproc)"
 
-      # NOTE: The old repository-dispatch to 'absmach/amdm' has been removed on purpose.
-      # If/when you have your OWN deployment repo, add a new dispatch step here that targets YOUR repo.
+      # Retag any absmach images to choovio and push
+      - name: Retag & push to choovio
+        run: |
+          set -euo pipefail
+          for svc in ${SERVICES}; do
+            SRC="ghcr.io/absmach/magistrala/${svc}:latest"
+            DST="${IMAGE_PREFIX}/${svc}:latest"
+            if docker image inspect "${SRC}" >/dev/null 2>&1; then
+              docker tag "${SRC}" "${DST}"
+            fi
+            if docker image inspect "${DST}" >/dev/null 2>&1; then
+              docker push "${DST}"
+            else
+              echo "WARN: no local image for ${svc}; skipping"
+            fi
+          done
+
+      - name: Trigger Helm Chart Deployment
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: absmach/amdm
+          event-type: deploy-latest-mg-images
+
