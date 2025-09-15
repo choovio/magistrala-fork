@@ -32,6 +32,7 @@ jobs:
       - name: Print context
         run: |
           echo "SHA=$GITHUB_SHA"
+          echo "EVENT=${{ github.event_name }}"
           git describe --always --dirty --tags || true
 
       - name: Ensure registry config
@@ -46,33 +47,37 @@ jobs:
           REGISTRY="$(grep -E '^REGISTRY=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
           ORG="$(grep -E '^ORG=' ops/ci/registry.env | tail -1 | cut -d= -f2- || true)"
           IMAGE_PREFIX="$(grep -E '^IMAGE_PREFIX=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
-          if [ -z "$REGISTRY" ] || [ -z "$IMAGE_PREFIX" ]; then
-            echo "Bad registry.env: need REGISTRY and IMAGE_PREFIX"; exit 1; fi
+          [ -n "$REGISTRY" ] && [ -n "$IMAGE_PREFIX" ] || { echo "Bad registry.env"; exit 1; }
           echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
           echo "org=$ORG" >> $GITHUB_OUTPUT
           echo "image_prefix=$IMAGE_PREFIX" >> $GITHUB_OUTPUT
           echo "sha8=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Docker login (GHCR)
-        # direct docker login (we avoid docker/login-action)
+      # Export optional AWS secrets to env so we can gate on env (safe for PRs from forks)
+      - name: Export optional AWS config to env
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_ENV
+
+      - name: Docker login (GHCR)
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Configure AWS OIDC (optional)
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+        if: ${{ env.AWS_ROLE_ARN != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-west-2' }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION != '' && env.AWS_DEFAULT_REGION || 'us-west-2' }}
 
       - name: Docker login (ECR) (optional)
-        if: ${{ secrets.AWS_ROLE_ARN != '' && secrets.AWS_ACCOUNT_ID != '' }}
+        if: ${{ env.AWS_ROLE_ARN != '' && env.AWS_ACCOUNT_ID != '' }}
         env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          FALLBACK_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-west-2' }}
+          FALLBACK_REGION: us-west-2
         run: |
           set -euo pipefail
-          : "${AWS_REGION:=${FALLBACK_REGION}}"
+          : "${AWS_REGION:=${AWS_DEFAULT_REGION:-$FALLBACK_REGION}}"
           ECR_REG="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           echo "ECR_REG=$ECR_REG" >> $GITHUB_ENV
           aws ecr describe-repositories --repository-names "${{ steps.reg.outputs.image_prefix }}" >/dev/null 2>&1 || \
@@ -90,9 +95,6 @@ jobs:
           mapfile -t contexts < <(git ls-files | grep -Ei '/Dockerfile$' | sed 's|/Dockerfile$||' | sort -u || true)
           printf 'found %s contexts\n' "${#contexts[@]}"
           printf '%s\n' "${contexts[@]}" | nl -ba || true
-          if [ "${#contexts[@]}" -eq 0 ]; then
-            echo "No Dockerfiles found. Build step will noop."
-          fi
           printf '%s' "$(printf '%s\n' "${contexts[@]}")" > contexts.txt
 
       - name: Build & Push
@@ -105,13 +107,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -s contexts.txt ]; then
-            echo "No contexts; nothing to build."
+            echo "No Dockerfiles found. Nothing to build."
             exit 0
           fi
 
           while IFS= read -r ctx; do
             name="$(basename "$ctx")"
 
+            # Compose GHCR target
             if [ -n "$ORG" ]; then
               ghcr_img="$REGISTRY/$ORG/$IMAGE_PREFIX:${name}-${SHA8}"
             else
@@ -119,8 +122,14 @@ jobs:
             fi
 
             echo "== Building $name from $ctx → $ghcr_img"
-            docker buildx build --platform linux/amd64 -t "$ghcr_img" "$ctx" --push
+            docker buildx build \
+              --platform linux/amd64 \
+              --build-arg SVC="$name" \
+              -t "$ghcr_img" \
+              "$ctx" \
+              --push
 
+            # Optional ECR mirror (only if AWS creds present)
             if [ -n "${ECR_REG:-}" ]; then
               ecr_img="$ECR_REG/${IMAGE_PREFIX}:${name}-${SHA8}"
               echo "Mirroring to $ecr_img"
