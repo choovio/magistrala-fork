@@ -1,9 +1,11 @@
 # Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
-MG_DOCKER_IMAGE_NAME_PREFIX ?= ghcr.io/absmach/magistrala
+REGISTRY ?= ghcr.io
+ORG      ?= $(if $(OWNER),$(OWNER),choovio)
+IMAGE_PREFIX ?= $(REGISTRY)/$(ORG)/magistrala
 BUILD_DIR = build
-SERVICES =  bootstrap provision re postgres-writer postgres-reader timescale-writer	timescale-reader cli alarms reports
+SERVICES ?= bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports
 DOCKERS = $(addprefix docker_,$(SERVICES))
 DOCKERS_DEV = $(addprefix docker_dev_,$(SERVICES))
 CGO_ENABLED ?= 0
@@ -56,7 +58,7 @@ define make_docker
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg TIME=$(TIME) \
-		--tag=$(MG_DOCKER_IMAGE_NAME_PREFIX)/$(svc) \
+		--tag=$(IMAGE_PREFIX)/$(svc) \
 		-f docker/Dockerfile .
 endef
 
@@ -66,7 +68,7 @@ define make_docker_dev
 	docker build \
 		--no-cache \
 		--build-arg SVC=$(svc) \
-		--tag=$(MG_DOCKER_IMAGE_NAME_PREFIX)/$(svc) \
+		--tag=$(IMAGE_PREFIX)/$(svc) \
 		-f docker/Dockerfile.dev ./build
 endef
 
@@ -107,7 +109,7 @@ cleandocker:
 
 ifdef pv
 	# Remove unused volumes
-	docker volume ls -f name=$(MG_DOCKER_IMAGE_NAME_PREFIX) -f dangling=true -q | xargs -r docker volume rm
+	docker volume ls -f name=$(IMAGE_PREFIX) -f dangling=true -q | xargs -r docker volume rm
 endif
 
 install:
@@ -195,7 +197,7 @@ dockers_dev: $(DOCKERS_DEV)
 
 define docker_push
 	for svc in $(SERVICES); do \
-		docker push $(MG_DOCKER_IMAGE_NAME_PREFIX)/$$svc:$(1); \
+		docker push $(IMAGE_PREFIX)/$$svc:$(1); \
 	done
 endef
 
@@ -210,7 +212,7 @@ release:
 	git checkout $(version)
 	$(MAKE) dockers
 	for svc in $(SERVICES); do \
-		docker tag $(MG_DOCKER_IMAGE_NAME_PREFIX)/$$svc $(MG_DOCKER_IMAGE_NAME_PREFIX)/$$svc:$(version); \
+		docker tag $(IMAGE_PREFIX)/$$svc $(IMAGE_PREFIX)/$$svc:$(version); \
 	done
 	$(call docker_push,$(version))
 

@@ -12,12 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # allow GITHUB_TOKEN to publish to GHCR
+      packages: write   # required to push to GHCR with GITHUB_TOKEN
 
     env:
       OWNER: ${{ github.repository_owner }}
       IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/magistrala
-      # Services your Makefile builds/pushes (update if needed):
       SERVICES: "bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports"
 
     steps:
@@ -55,36 +54,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Try to steer the Makefile to publish under your org; if it's ignored,
-      # the next step retags from absmach → choovio and pushes.
-      - name: Build (prefer choovio namespace)
-        run: |
-          make latest \
-            REGISTRY=ghcr.io \
-            ORG="${OWNER}" \
-            IMAGE_PREFIX="${IMAGE_PREFIX}" \
-            -j "$(nproc)"
+      # Build with whatever tags the Makefile currently produces (may still tag absmach)
+      - name: Build (legacy tags OK)
+        run: make latest -j "$(nproc)"
 
-      # Safety net: if the Makefile still tagged as ghcr.io/absmach/magistrala/*:latest,
-      # retag to ghcr.io/${OWNER}/magistrala/*:latest and push.
-      - name: Retag and push to choovio (if needed)
+      # Retag any absmach images to choovio and push
+      - name: Retag & push to choovio
         run: |
           set -euo pipefail
           for svc in ${SERVICES}; do
             SRC="ghcr.io/absmach/magistrala/${svc}:latest"
             DST="${IMAGE_PREFIX}/${svc}:latest"
-            if docker image inspect "${SRC}" > /dev/null 2>&1; then
-              echo "Retagging ${SRC} -> ${DST}"
+            if docker image inspect "${SRC}" >/dev/null 2>&1; then
               docker tag "${SRC}" "${DST}"
+            fi
+            if docker image inspect "${DST}" >/dev/null 2>&1; then
               docker push "${DST}"
             else
-              # If image already built/tagged as DST, just push it
-              if docker image inspect "${DST}" > /dev/null 2>&1; then
-                echo "Pushing ${DST}"
-                docker push "${DST}"
-              else
-                echo "WARN: Neither ${SRC} nor ${DST} exists locally; skipping ${svc}"
-              fi
+              echo "WARN: no local image for ${svc}; skipping"
             fi
           done
 
