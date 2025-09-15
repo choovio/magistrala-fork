@@ -1,89 +1,131 @@
 # Copyright (c) Abstract Machines
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
 # SPDX-License-Identifier: MIT
-# Copyright (c) Abstract Machines
-# SPDX-License-Identifier: Apache-2.0
+name: CI Pipeline
 
-name: Continuous Delivery
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-push:
-    name: Build and Push
+  lint-and-build:
+    name: Lint and Build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write   # required to push to GHCR with GITHUB_TOKEN
-
-    env:
-      OWNER: ${{ github.repository_owner }}
-      IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/magistrala
-      SERVICES: "bootstrap provision re postgres-writer postgres-reader timescale-writer timescale-reader cli alarms reports"
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fetch tags for the build
-        run: git fetch --prune --tags
+      - name: Print context
+        run: |
+          echo "SHA=$GITHUB_SHA"
+          git describe --always --dirty --tags || true
 
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.24.x
-          cache-dependency-path: go.sum
+      - name: Ensure registry config
+        run: |
+          test -f ops/ci/registry.env || (echo "Missing ops/ci/registry.env" && exit 1)
+          sed -n '1,120p' ops/ci/registry.env
 
-      - name: Run tests
-        run: make test
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV }}
-          files: ./coverage/*.out
-          verbose: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Build with whatever tags the Makefile currently produces (may still tag absmach)
-      - name: Build (legacy tags OK)
-        run: make latest -j "$(nproc)"
-
-      # Retag any absmach images to choovio and push
-      - name: Retag & push to choovio
+      - name: Load registry config
+        id: reg
         run: |
           set -euo pipefail
-          for svc in ${SERVICES}; do
-            SRC="ghcr.io/choovio/magistrala/${svc}:latest"
-            DST="${IMAGE_PREFIX}/${svc}:latest"
-            if docker image inspect "${SRC}" >/dev/null 2>&1; then
-              docker tag "${SRC}" "${DST}"
-            fi
-            if docker image inspect "${DST}" >/dev/null 2>&1; then
-              docker push "${DST}"
-            else
-              echo "WARN: no local image for ${svc}; skipping"
-            fi
-          done
+          REGISTRY="$(grep -E '^REGISTRY=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
+          ORG="$(grep -E '^ORG=' ops/ci/registry.env | tail -1 | cut -d= -f2- || true)"
+          IMAGE_PREFIX="$(grep -E '^IMAGE_PREFIX=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
+          if [ -z "$REGISTRY" ] || [ -z "$IMAGE_PREFIX" ]; then
+            echo "Bad registry.env: need REGISTRY and IMAGE_PREFIX"; exit 1; fi
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          echo "org=$ORG" >> $GITHUB_OUTPUT
+          echo "image_prefix=$IMAGE_PREFIX" >> $GITHUB_OUTPUT
+          echo "sha8=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Trigger Helm Chart Deployment
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peter-evans/repository-dispatch@v3
+      - name: Docker login (GHCR)
+        # direct docker login (we avoid docker/login-action)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Configure AWS OIDC (optional)
+        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
-          repository: choovio/amdm
-          event-type: deploy-latest-mg-images
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-west-2' }}
 
+      - name: Docker login (ECR) (optional)
+        if: ${{ secrets.AWS_ROLE_ARN != '' && secrets.AWS_ACCOUNT_ID != '' }}
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          FALLBACK_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-west-2' }}
+        run: |
+          set -euo pipefail
+          : "${AWS_REGION:=${FALLBACK_REGION}}"
+          ECR_REG="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          echo "ECR_REG=$ECR_REG" >> $GITHUB_ENV
+          aws ecr describe-repositories --repository-names "${{ steps.reg.outputs.image_prefix }}" >/dev/null 2>&1 || \
+            aws ecr create-repository --repository-name "${{ steps.reg.outputs.image_prefix }}" --image-scanning-configuration scanOnPush=true >/dev/null
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REG"
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Find Docker contexts
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t contexts < <(git ls-files | grep -Ei '/Dockerfile$' | sed 's|/Dockerfile$||' | sort -u || true)
+          printf 'found %s contexts\n' "${#contexts[@]}"
+          printf '%s\n' "${contexts[@]}" | nl -ba || true
+          if [ "${#contexts[@]}" -eq 0 ]; then
+            echo "No Dockerfiles found. Build step will noop."
+          fi
+          printf '%s' "$(printf '%s\n' "${contexts[@]}")" > contexts.txt
+
+      - name: Build & Push
+        env:
+          REGISTRY: ${{ steps.reg.outputs.registry }}
+          ORG: ${{ steps.reg.outputs.org }}
+          IMAGE_PREFIX: ${{ steps.reg.outputs.image_prefix }}
+          SHA8: ${{ steps.reg.outputs.sha8 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s contexts.txt ]; then
+            echo "No contexts; nothing to build."
+            exit 0
+          fi
+
+          while IFS= read -r ctx; do
+            name="$(basename "$ctx")"
+
+            if [ -n "$ORG" ]; then
+              ghcr_img="$REGISTRY/$ORG/$IMAGE_PREFIX:${name}-${SHA8}"
+            else
+              ghcr_img="$REGISTRY/$IMAGE_PREFIX:${name}-${SHA8}"
+            fi
+
+            echo "== Building $name from $ctx → $ghcr_img"
+            docker buildx build --platform linux/amd64 -t "$ghcr_img" "$ctx" --push
+
+            if [ -n "${ECR_REG:-}" ]; then
+              ecr_img="$ECR_REG/${IMAGE_PREFIX}:${name}-${SHA8}"
+              echo "Mirroring to $ecr_img"
+              docker pull "$ghcr_img"
+              docker tag "$ghcr_img" "$ecr_img"
+              docker push "$ecr_img"
+            fi
+          done < contexts.txt
