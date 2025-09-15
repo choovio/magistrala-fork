@@ -1,24 +1,33 @@
-# Copyright (c) Abstract Machines
-# SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: MIT
+ * SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+ */
 
-FROM golang:1.24.5-alpine AS builder
+# ---- builder ----
+FROM alpine:3.20 AS builder
 ARG SVC
 ARG GOARCH
 ARG GOARM
 ARG VERSION
 ARG COMMIT
 ARG TIME
-
 WORKDIR /go/src/github.com/absmach/supermq
-COPY . .
-RUN apk update \
-    && apk add make upx\
-    && make $SVC \
-    && upx build/$SVC \
-    && mv build/$SVC /exe
 
-FROM scratch
-# Certificates are needed so that mailing util can work.
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /exe /
+RUN apk add --no-cache build-base go upx
+
+ENV GOARCH=${GOARCH} \
+    GOARM=${GOARM} \
+    VERSION=${VERSION} \
+    COMMIT=${COMMIT} \
+    TIME=${TIME}
+
+COPY . .
+RUN make "${SVC}" \
+ && test -f "build/${SVC}" \
+ && { upx "build/${SVC}" || true; }
+
+# ---- runner ----
+FROM alpine:3.20
+ARG SVC
+WORKDIR /
+COPY --from=builder /go/src/github.com/absmach/supermq/build/${SVC} /exe
 ENTRYPOINT ["/exe"]
