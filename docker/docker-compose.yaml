@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 name: "magistrala"
@@ -27,7 +30,7 @@ volumes:
 
 services:
   ui:
-    image: ghcr.io/absmach/magistrala/ui-mg:latest
+    image: ghcr.io/choovio/magistrala/ui-mg:latest
     container_name: magistrala-ui
     ports:
       - 3000:3000
@@ -68,7 +71,7 @@ services:
       MG_SUPPORT_EMAIL_PASS: ${MG_SUPPORT_EMAIL_PASS}
 
   ui-backend:
-    image: ghcr.io/absmach/magistrala/ui-backend:latest
+    image: ghcr.io/choovio/magistrala/ui-backend:latest
     container_name: magistrala-ui-backend
     ports:
       - ${MG_UI_BACKEND_HTTP_PORT}:${MG_UI_BACKEND_HTTP_PORT}
@@ -197,7 +200,7 @@ services:
       - magistrala-re-db-volume:/var/lib/postgresql/data
 
   re:
-    image: ghcr.io/absmach/magistrala/re:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/re:${MG_RELEASE_TAG}
     container_name: magistrala-re
     depends_on:
       - re-db
@@ -287,7 +290,7 @@ services:
       - magistrala-alarms-db-volume:/var/lib/postgresql/data
 
   alarms:
-    image: ghcr.io/absmach/magistrala/alarms:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/alarms:${MG_RELEASE_TAG}
     container_name: magistrala-alarms
     depends_on:
       - alarms-db
@@ -375,7 +378,7 @@ services:
       - magistrala-reports-db-volume:/var/lib/postgresql/data
 
   reports:
-    image: ghcr.io/absmach/magistrala/reports:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/reports:${MG_RELEASE_TAG}
     container_name: magistrala-reports
     depends_on:
       - reports-db
@@ -457,3 +460,5 @@ services:
       - "4000:3000"
     networks:
       - magistrala-base-net
+
+

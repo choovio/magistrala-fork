@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 # This docker-compose file contains optional Timescale and Timescale-writer services
@@ -32,7 +35,7 @@ services:
       - magistrala-timescale-writer-volume:/var/lib/postgresql/data
 
   timescale-writer:
-    image: ghcr.io/absmach/magistrala/timescale-writer:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/timescale-writer:${MG_RELEASE_TAG}
     container_name: magistrala-timescale-writer
     depends_on:
       - timescale
@@ -64,3 +67,5 @@ services:
       - magistrala-base-net
     volumes:
       - ./addons/timescale-writer/config.toml:${MG_TIMESCALE_WRITER_CONFIG_PATH}
+
+

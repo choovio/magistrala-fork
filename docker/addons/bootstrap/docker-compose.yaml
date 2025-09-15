@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 # This docker-compose file contains optional bootstrap services. Since it's optional, this file is
@@ -27,7 +30,7 @@ services:
       - magistrala-bootstrap-db-volume:/var/lib/postgresql/data
 
   bootstrap:
-    image: ghcr.io/absmach/magistrala/bootstrap:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/bootstrap:${MG_RELEASE_TAG}
     container_name: magistrala-bootstrap
     depends_on:
       - bootstrap-db
@@ -89,3 +92,5 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+
+

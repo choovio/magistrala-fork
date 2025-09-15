@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 # This docker-compose file contains optional Postgres and Postgres-writer services
@@ -31,7 +34,7 @@ services:
       - magistrala-postgres-writer-volume:/var/lib/postgresql/data
 
   postgres-writer:
-    image: ghcr.io/absmach/magistrala/postgres-writer:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/postgres-writer:${MG_RELEASE_TAG}
     container_name: magistrala-postgres-writer
     depends_on:
       - postgres
@@ -63,3 +66,5 @@ services:
       - magistrala-base-net
     volumes:
       - ./config.toml:/config.toml
+
+
