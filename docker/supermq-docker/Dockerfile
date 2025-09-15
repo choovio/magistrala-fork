@@ -1,9 +1,9 @@
-# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
 
 # ---- builder ----
 FROM alpine:3.20 AS builder
-# SuperMQ may use a different make target/binary name; parameterize:
 ARG SVC="supermq"
 ARG BIN_PATH="build/${SVC}"
 

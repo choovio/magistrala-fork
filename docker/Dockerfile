@@ -1,18 +1,17 @@
-# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
 
 # ---- builder ----
 FROM alpine:3.20 AS builder
 ARG SVC
-# Optional: override if the binary path differs
 ARG BIN_PATH="build/${SVC}"
 
 WORKDIR /src
 RUN apk add --no-cache build-base upx
 COPY . .
 
-# Build the service and (optionally) compress the binary.
-# Do not fail if upx cannot compress this binary (PIE, etc.).
+# Build the service and (optionally) compress; tolerate UPX failures.
 RUN test -n "${SVC}" || (echo "Missing build arg SVC" && exit 2) \
  && make "${SVC}" \
  && test -f "${BIN_PATH}" \
