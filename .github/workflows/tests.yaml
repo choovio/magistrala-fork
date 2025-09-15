@@ -26,6 +26,21 @@ jobs:
       - name: Fetch SuperMQ
         run: |
           make fetch_supermq
+
+      - name: Apply SuperMQ patches (tolerant)
+        run: |
+          set -e
+          if ls docker/supermq-docker/patches/*.patch >/dev/null 2>&1; then
+            # Try to apply, but don't fail the job if some hunks don't match upstream
+            if ! git -C docker/supermq-docker apply --reject --whitespace=nowarn patches/*.patch; then
+              echo "::warning::SuperMQ patch had rejects; continuing CI"
+            fi
+          else
+            echo "No patches found under docker/supermq-docker/patches/"
+          fi
+
+      - name: Verify SuperMQ docker files
+        run: |
           if [[ -n $(git status --porcelain docker/supermq-docker) ]]; then
             echo "SuperMQ docker file is not up to date. Please update it"
             git diff docker/supermq-docker
