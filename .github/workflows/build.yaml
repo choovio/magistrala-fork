@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           for svc in ${SERVICES}; do
-            SRC="ghcr.io/absmach/magistrala/${svc}:latest"
+            SRC="ghcr.io/choovio/magistrala/${svc}:latest"
             DST="${IMAGE_PREFIX}/${svc}:latest"
             if docker image inspect "${SRC}" >/dev/null 2>&1; then
               docker tag "${SRC}" "${DST}"
@@ -83,6 +83,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_DISPATCH_TOKEN }}
-          repository: absmach/amdm
+          repository: choovio/amdm
           event-type: deploy-latest-mg-images
+
 

@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 # This docker-compose file contains optional Timescale-reader service for Magistrala platform.
@@ -13,7 +16,7 @@ networks:
 
 services:
   timescale-reader:
-    image: ghcr.io/absmach/magistrala/timescale-reader:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/timescale-reader:${MG_RELEASE_TAG}
     container_name: magistrala-timescale-reader
     restart: on-failure
     environment:
@@ -126,3 +129,5 @@ services:
         target: /readers-grpc-client${MG_TIMESCALE_READER_GRPC_CLIENT_KEY:+.key}
         bind:
           create_host_path: true
+
+

@@ -1,4 +1,7 @@
 # Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+# Copyright (c) Abstract Machines
 # SPDX-License-Identifier: Apache-2.0
 
 # This docker-compose file contains optional provision services. Since it's optional, this file is
@@ -11,7 +14,7 @@ networks:
 
 services:
   provision:
-    image: ghcr.io/absmach/magistrala/provision:${MG_RELEASE_TAG}
+    image: ghcr.io/choovio/magistrala/provision:${MG_RELEASE_TAG}
     container_name: magistrala-provision
     restart: on-failure
     networks:
@@ -44,3 +47,5 @@ services:
       - ./configs:/configs
       - ../../ssl/certs/ca.key:/etc/ssl/certs/ca.key
       - ../../ssl/certs/ca.crt:/etc/ssl/certs/ca.crt
+
+
