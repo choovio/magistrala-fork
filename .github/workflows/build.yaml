@@ -87,16 +87,37 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Find service Docker contexts (addons only)
+      - name: Find service Docker contexts (addons + adapters)
         id: ctx
         shell: bash
         run: |
           set -euo pipefail
-          # Only build docker/addons/*/Dockerfile (skip top-level docker/ base images)
-          mapfile -t contexts < <(git ls-files 'docker/addons/**/Dockerfile' | sed 's|/Dockerfile$||' | sort -u || true)
+          declare -a contexts=()
+
+          while IFS= read -r dockerfile; do
+            contexts+=("${dockerfile%/Dockerfile}")
+          done < <(git ls-files 'docker/addons/**/Dockerfile' \
+            | grep -vE 'docker/addons/(http-adapter|ws-adapter)/Dockerfile' \
+            | sort -u || true)
+
+          for extra in docker/http-adapter docker/ws-adapter; do
+            if git ls-files --error-unmatch "${extra}/Dockerfile" >/dev/null 2>&1; then
+              contexts+=("${extra}")
+            fi
+          done
+
+          if [ "${#contexts[@]}" -gt 0 ]; then
+            mapfile -t contexts < <(printf '%s\n' "${contexts[@]}" | sort -u)
+          fi
+
           printf 'found %s candidate contexts\n' "${#contexts[@]}"
           printf '%s\n' "${contexts[@]}" | nl -ba || true
-          printf '%s' "$(printf '%s\n' "${contexts[@]}")" > contexts.txt
+
+          if [ "${#contexts[@]}" -gt 0 ]; then
+            printf '%s\n' "${contexts[@]}" > contexts.txt
+          else
+            : > contexts.txt
+          fi
 
       - name: Build & Push
         env:
@@ -112,12 +133,31 @@ jobs:
             exit 0
           fi
 
+          allow_missing_targets=(http-adapter ws-adapter)
+
           while IFS= read -r ctx; do
+            [[ -n "$ctx" ]] || continue
             name="$(basename "$ctx")"
 
-            # Ensure there's a corresponding 'make <svc>' target in the root Makefile
+            skip_target_check=no
+            for svc in "${allow_missing_targets[@]}"; do
+              if [ "$name" = "$svc" ]; then
+                skip_target_check=yes
+                break
+              fi
+            done
+
             if ! grep -Eq "^[[:space:]]*${name}:" Makefile; then
-              echo "Skip $name (no matching 'make ${name}' target)"; continue
+              if [ "$skip_target_check" = yes ]; then
+                echo "Allowing $name without Makefile target (dedicated adapter Dockerfile)"
+              else
+                echo "Skip $name (no matching 'make ${name}' target)"; continue
+              fi
+            fi
+
+            dockerfile_path="${ctx}/Dockerfile"
+            if [ ! -f "$dockerfile_path" ]; then
+              echo "Skip $name (no Dockerfile at $dockerfile_path)"; continue
             fi
 
             # Compose GHCR target
@@ -127,10 +167,11 @@ jobs:
               ghcr_img="$REGISTRY/$IMAGE_PREFIX:${name}-${SHA8}"
             fi
 
-            echo "== Building $name from $ctx → $ghcr_img"
+            echo "== Building $name from $ctx (Dockerfile: $dockerfile_path) → $ghcr_img"
             docker buildx build \
               --platform linux/amd64 \
               --build-arg SVC="$name" \
+              -f "$dockerfile_path" \
               -t "$ghcr_img" \
               "$ctx" \
               --push
