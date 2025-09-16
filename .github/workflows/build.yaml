@@ -5,8 +5,7 @@ name: CI Pipeline
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -25,8 +24,7 @@ jobs:
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
       - name: Block direct edits under docker/supermq-docker
         shell: bash
         run: |
@@ -38,12 +36,10 @@ jobs:
             BASE_REF="origin/${BASE_BRANCH}"
           fi
           git fetch origin +refs/heads/*:refs/remotes/origin/* >/dev/null 2>&1 || true
-          CHANGED=$(git diff --name-only "$BASE_REF"...HEAD -- docker/supermq-docker \
-                    | grep -v '^docker/supermq-docker/patches/' || true)
+          CHANGED=$(git diff --name-only "$BASE_REF"...HEAD -- docker/supermq-docker | grep -v '^docker/supermq-docker/patches/' || true)
           if [[ -n "$CHANGED" ]]; then
             echo "::error::Direct edits in docker/supermq-docker detected (use patches/ only):"
-            echo "$CHANGED"
-            exit 1
+            echo "$CHANGED"; exit 1
           fi
           echo "SuperMQ patches-only policy respected."
 
@@ -58,30 +54,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Print context
-        run: |
-          echo "SHA=$GITHUB_SHA"
-          echo "EVENT=${{ github.event_name }}"
-          git describe --always --dirty --tags || true
-
-      # YAML-safe, one-line GITHUB_OUTPUT writes (no pretty JSON in outputs)
-      - name: Discover adapter contexts (bash)
+      - name: Discover adapter contexts (bash; one-line outputs)
         id: ctx
         shell: bash
         run: |
           set -euo pipefail
+          enc() { jq -Rsc @json; }  # not used but handy
+          find_main() {
+            local needle="$1"
+            # candidates: .../cmd/<name>, .../<name>, .../services/<name>
+            mapfile -t CANDIDATES < <(git ls-files | grep -E "/(cmd/)?${needle}(/|$)|(^|/)${needle}(/|$)|/services/${needle}(/|$)" | xargs -r -I{} dirname {} | sort -u)
+            for d in "${CANDIDATES[@]}"; do
+              if [[ -f "$d/main.go" ]] || grep -q 'package main' "$d"/*.go 2>/dev/null; then
+                echo "$d"; return 0
+              fi
+            done
+            echo ""
+          }
           includes='[]'
-          if [[ -f docker/http-adapter/Dockerfile ]]; then
-            includes="$(jq -c '. + [{"name":"http-adapter","context":"." ,"dockerfile":"docker/http-adapter/Dockerfile"}]' <<<"$includes")"
+          http_main="$(find_main 'http-adapter')"
+          ws_main="$(find_main 'ws-adapter')"
+
+          if [[ -f docker/http-adapter/Dockerfile && -n "$http_main" ]]; then
+            includes="$(jq -c --arg m "$http_main" '. + [{"name":"http-adapter","context":".","dockerfile":"docker/http-adapter/Dockerfile","main":$m}]' <<<"$includes")"
           fi
-          if [[ -f docker/ws-adapter/Dockerfile ]]; then
-            includes="$(jq -c '. + [{"name":"ws-adapter" ,"context":"." ,"dockerfile":"docker/ws-adapter/Dockerfile"}]' <<<"$includes")"
+          if [[ -f docker/ws-adapter/Dockerfile && -n "$ws_main" ]]; then
+            includes="$(jq -c --arg m "$ws_main" '. + [{"name":"ws-adapter","context":".","dockerfile":"docker/ws-adapter/Dockerfile","main":$m}]' <<<"$includes")"
           fi
+
           matrix="$(jq -cn --argjson inc "$includes" '{include:$inc}')"
-          # STRICT: single-line write to $GITHUB_OUTPUT
           printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
           printf 'count=%s\n' "$(jq -r '.include|length' <<<"$matrix")" >> "$GITHUB_OUTPUT"
-          # Log pretty JSON to console only (not to $GITHUB_OUTPUT)
           echo "$matrix" | jq .
 
   build-adapters:
@@ -95,8 +98,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -104,7 +106,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build only. Push only on main using GHCR + GITHUB_TOKEN (no secrets in if:)
       - name: Login to GHCR (push only on main)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@v3
@@ -118,6 +119,8 @@ jobs:
         with:
           context:   ${{ matrix.context }}
           file:      ${{ matrix.dockerfile }}
+          build-args: |
+            MAIN=${{ matrix.main }}
           platforms: linux/amd64
           push:      ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags:      ghcr.io/choovio/${{ matrix.name }}:${{ github.sha }}
