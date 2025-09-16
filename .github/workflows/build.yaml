@@ -1,242 +1,199 @@
-# Copyright (c) Abstract Machines
-# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-# SPDX-License-Identifier: MIT
-name: CI Pipeline
+name: Build & Guards (Adapters)
 
 on:
   push:
-    branches: [ main ]
+    branches: ["**"]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write     # for AWS OIDC
   packages: write
-  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  IMAGE_NAMESPACE: magistrala   # adjust if you use a different namespace
+  # Enforce /health usage & legacy header policy by guards below.
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: build-adapters-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  discover-build-contexts:
-    name: Discover Docker build contexts
+  license_guard:
+    name: License / SPDX header guard
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.ctx.outputs.matrix }}
-      count: ${{ steps.ctx.outputs.count }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Print context
-        run: |
-          echo "SHA=$GITHUB_SHA"
-          echo "EVENT=${{ github.event_name }}"
-          git describe --always --dirty --tags || true
-
-      - name: Find service Docker contexts (addons + adapters)
-        id: ctx
+      - name: Verify SPDX headers (Abstract Machines in first 5 lines)
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-import textwrap
-exec(textwrap.dedent("""
-    import json, os, pathlib, re, subprocess, sys
+          echo "Checking SPDX headers..."
+          FAIL_FILE="$(mktemp)"
+          # File globs to check; extend as needed
+          GLOBS=(
+            "*.go" "*.py" "*.ts" "*.tsx" "*.js" "*.jsx" "*.sh" "Dockerfile" "*.yml" "*.yaml"
+          )
+          mapfile -t FILES < <(git ls-files "${GLOBS[@]}" || true)
+          for f in "${FILES[@]}"; do
+            # Read first 5 lines (robust to short files)
+            head -n 5 "$f" | awk 'BEGIN{IGNORECASE=1} {print}' > /tmp/head5.txt
+            if ! grep -q "SPDX-License-Identifier:" /tmp/head5.txt; then
+              echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$FAIL_FILE"
+              continue
+            fi
+            if ! grep -q "Copyright (c) .*Abstract Machines" /tmp/head5.txt; then
+              echo "$f: missing required Abstract Machines copyright line in first 5 lines" >> "$FAIL_FILE"
+            fi
+          done
+          if [[ -s "$FAIL_FILE" ]]; then
+            echo "::error::License/SPDX header check failed:"
+            cat "$FAIL_FILE"
+            exit 1
+          fi
+          echo "SPDX headers look good."
 
-    allow_missing = {"http-adapter", "ws-adapter"}
-
-    def git_ls(pattern: str):
-        proc = subprocess.run(
-            ["git", "ls-files", pattern],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if proc.returncode not in (0, 1):
-            print(proc.stderr, file=sys.stderr)
-            sys.exit(proc.returncode)
-        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-
-    dockerfiles = git_ls("docker/addons/**/Dockerfile")
-    filtered = [
-        path for path in dockerfiles
-        if not re.search(r"docker/addons/(http-adapter|ws-adapter)/Dockerfile$", path)
-    ]
-    contexts = {str(pathlib.Path(path).parent) for path in filtered}
-
-    for extra in ("docker/http-adapter", "docker/ws-adapter"):
-        if pathlib.Path(extra, "Dockerfile").is_file():
-            contexts.add(extra)
-
-    contexts = sorted(contexts)
-    makefile = pathlib.Path("Makefile")
-    make_text = makefile.read_text() if makefile.exists() else ""
-    include = []
-    skipped = []
-
-    for ctx in contexts:
-        dockerfile_path = pathlib.Path(ctx) / "Dockerfile"
-        if not dockerfile_path.is_file():
-            skipped.append((ctx, "missing Dockerfile"))
-            continue
-
-        service = pathlib.Path(ctx).name
-        if not re.search(rf"^\\s*{re.escape(service)}:", make_text, re.MULTILINE):
-            if service not in allow_missing:
-                skipped.append((service, "no Makefile target"))
-                continue
-
-        if service == "http-adapter":
-            context_path = "."
-            dockerfile = "docker/http-adapter/Dockerfile"
-        elif service == "ws-adapter":
-            context_path = "."
-            dockerfile = "docker/ws-adapter/Dockerfile"
-        else:
-            context_path = ctx
-            dockerfile = str(dockerfile_path)
-
-        include.append({
-            "service": service,
-            "context": context_path,
-            "dockerfile": dockerfile,
-        })
-
-    matrix = {"include": include}
-    print(f"Discovered {len(include)} build context(s).")
-    for entry in include:
-        print(f"- {entry['service']}: context={entry['context']} dockerfile={entry['dockerfile']}")
-    if skipped:
-        print("Skipped entries:")
-        for name, reason in skipped:
-            print(f"  - {name}: {reason}")
-
-    out = os.environ.get("GITHUB_OUTPUT")
-    if out:
-        with open(out, "a", encoding="utf-8") as fh:
-            fh.write(f"matrix={json.dumps(matrix)}\n")
-            fh.write(f"count={len(include)}\n")
-    else:
-        print("matrix=", json.dumps(matrix), sep="")
-        print("count=", len(include), sep="")
-"""))
-PY
-
-  build-and-push:
-    name: Build & Push (${{ matrix.service }})
-    needs: discover-build-contexts
-    if: ${{ fromJSON(needs.discover-build-contexts.outputs.count) > 0 }}
+  supermq_patches_guard:
+    name: SuperMQ patches-only policy
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.discover-build-contexts.outputs.matrix) }}
     steps:
-      - name: Checkout
+      - name: Checkout (full history for diff)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Print context
-        run: |
-          echo "SHA=$GITHUB_SHA"
-          echo "EVENT=${{ github.event_name }}"
-          git describe --always --dirty --tags || true
-
-      - name: Ensure registry config
-        run: |
-          test -f ops/ci/registry.env || (echo "Missing ops/ci/registry.env" && exit 1)
-          sed -n '1,120p' ops/ci/registry.env
-
-      - name: Load registry config
-        id: reg
+      - name: Enforce patches/ for docker/supermq-docker
+        shell: bash
         run: |
           set -euo pipefail
-          REGISTRY="$(grep -E '^REGISTRY=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
-          ORG="$(grep -E '^ORG=' ops/ci/registry.env | tail -1 | cut -d= -f2- || true)"
-          IMAGE_PREFIX="$(grep -E '^IMAGE_PREFIX=' ops/ci/registry.env | tail -1 | cut -d= -f2-)"
-          [ -n "$REGISTRY" ] && [ -n "$IMAGE_PREFIX" ] || { echo "Bad registry.env"; exit 1; }
-          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
-          echo "org=$ORG" >> $GITHUB_OUTPUT
-          echo "image_prefix=$IMAGE_PREFIX" >> $GITHUB_OUTPUT
-          echo "sha8=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          BASE_REF=""
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            # Compare against the default branch tip
+            BASE_BRANCH="$(git remote show origin | awk '/HEAD branch/ {print $NF}')"
+            BASE_REF="origin/${BASE_BRANCH}"
+          fi
+          echo "Base for diff: $BASE_REF"
+          git fetch origin +refs/heads/*:refs/remotes/origin/*
 
-      - name: Export optional AWS config to env
+          # List changes under docker/supermq-docker excluding patches/**
+          CHANGED=$(git diff --name-only "$BASE_REF"...HEAD -- docker/supermq-docker | grep -v '^docker/supermq-docker/patches/' || true)
+          if [[ -n "$CHANGED" ]]; then
+            echo "::error::Direct edits under docker/supermq-docker detected (only patches/ are allowed):"
+            echo "$CHANGED"
+            exit 1
+          fi
+          echo "SuperMQ patches-only policy respected."
+
+  build_adapters:
+    name: Build & Push Adapters
+    runs-on: ubuntu-latest
+    needs: [license_guard, supermq_patches_guard]
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Discover adapter contexts
+        id: discover
+        shell: bash
         run: |
-          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> $GITHUB_ENV
-          echo "AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
-          echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_ENV
+          set -euo pipefail
+          # Find docker/*adapter* directories containing a Dockerfile
+          mapfile -d '' DIRS < <(find docker -maxdepth 1 -type d -name "*adapter*" -print0 2>/dev/null || true)
+          INCLUDES=()
+          for dir in "${DIRS[@]}"; do
+            [[ -f "$dir/Dockerfile" ]] || continue
+            name="$(basename "$dir")"
+            # Optional: filter out supermq here if it ever matched
+            INCLUDES+=( "$(jq -n --arg context "$dir" --arg name "$name" '{context:$context,name:$name}')" )
+          done
+          if [[ ${#INCLUDES[@]} -eq 0 ]]; then
+            # Provide an empty include to keep YAML valid; downstream job will skip
+            MATRIX='{"include":[]}'
+          else
+            MATRIX="$(printf '%s\n' "${INCLUDES[@]}" | jq -s '{include: .}')"
+          fi
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "Discovered matrix:"
+          echo "$MATRIX" | jq .
 
-      - name: Docker login (GHCR)
-        run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+  build_and_push:
+    name: Build & Push (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    needs: build_adapters
+    if: ${{ fromJSON(needs.build_adapters.outputs.matrix).include && fromJSON(needs.build_adapters.outputs.matrix).include != '' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.build_adapters.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure AWS OIDC (optional)
-        if: ${{ env.AWS_ROLE_ARN != '' }}
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_DEFAULT_REGION != '' && env.AWS_DEFAULT_REGION || 'us-west-2' }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Docker login (ECR) (optional)
-        if: ${{ env.AWS_ROLE_ARN != '' && env.AWS_ACCOUNT_ID != '' }}
-        env:
-          FALLBACK_REGION: us-west-2
+      - name: Configure AWS credentials (access keys)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure ECR repository exists
+        shell: bash
         run: |
           set -euo pipefail
-          : "${AWS_REGION:=${AWS_DEFAULT_REGION:-$FALLBACK_REGION}}"
-          ECR_REG="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          echo "ECR_REG=$ECR_REG" >> $GITHUB_ENV
-          aws ecr describe-repositories --repository-names "${{ steps.reg.outputs.image_prefix }}" >/dev/null 2>&1 || \
-            aws ecr create-repository --repository-name "${{ steps.reg.outputs.image_prefix }}" --image-scanning-configuration scanOnPush=true >/dev/null
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REG"
+          REPO="${IMAGE_NAMESPACE}/${{ matrix.name }}"
+          aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1 || \
+            aws ecr create-repository --repository-name "$REPO" >/dev/null
+          echo "ECR repo ensured: $REPO"
 
-      - name: Set up Buildx
+      - name: Set image tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::12}"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.name }}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Image will be: ${IMAGE}:${SHORT_SHA} and ${IMAGE}:latest"
+
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push
-        id: build
-        env:
-          REGISTRY: ${{ steps.reg.outputs.registry }}
-          ORG: ${{ steps.reg.outputs.org }}
-          IMAGE_PREFIX: ${{ steps.reg.outputs.image_prefix }}
-          SHA8: ${{ steps.reg.outputs.sha8 }}
-          CONTEXT: ${{ matrix.context }}
-          DOCKERFILE: ${{ matrix.dockerfile }}
-          SERVICE: ${{ matrix.service }}
-        run: |
-          set -euo pipefail
-          if [ -n "$ORG" ]; then
-            IMAGE_TAG="$REGISTRY/$ORG/$IMAGE_PREFIX:${SERVICE}-${SHA8}"
-          else
-            IMAGE_TAG="$REGISTRY/$IMAGE_PREFIX:${SERVICE}-${SHA8}"
-          fi
-          echo "== Building ${SERVICE} (Dockerfile: ${DOCKERFILE}) from ${CONTEXT} -> ${IMAGE_TAG}"
-          docker buildx build \
-            --platform linux/amd64 \
-            --build-arg SVC="${SERVICE}" \
-            --file "${DOCKERFILE}" \
-            --tag "${IMAGE_TAG}" \
-            --push \
-            "${CONTEXT}"
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.image }}:${{ steps.tags.outputs.tag_sha }}
+            ${{ steps.tags.outputs.image }}:latest
+          cache-from: type=registry,ref=${{ steps.tags.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.tags.outputs.image }}:buildcache,mode=max
 
-      - name: Mirror to ECR (optional)
-        if: ${{ env.ECR_REG != '' }}
-        env:
-          IMAGE_TAG: ${{ steps.build.outputs.image_tag }}
-          IMAGE_PREFIX: ${{ steps.reg.outputs.image_prefix }}
-          SERVICE: ${{ matrix.service }}
-          SHA8: ${{ steps.reg.outputs.sha8 }}
+      - name: Output image digest
+        shell: bash
         run: |
           set -euo pipefail
-          ECR_IMG="$ECR_REG/${IMAGE_PREFIX}:${SERVICE}-${SHA8}"
-          echo "Mirroring to $ECR_IMG"
-          docker pull "$IMAGE_TAG"
-          docker tag "$IMAGE_TAG" "$ECR_IMG"
-          docker push "$ECR_IMG"
+          DIGEST="$(aws ecr describe-images --repository-name "${IMAGE_NAMESPACE}/${{ matrix.name }}" \
+                     --image-ids imageTag=${{ steps.tags.outputs.tag_sha }} \
+                     | jq -r '.imageDetails[0].imageDigest')"
+          echo "Pushed digest: $DIGEST"
