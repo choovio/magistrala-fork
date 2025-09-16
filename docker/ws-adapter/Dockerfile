@@ -10,12 +10,15 @@ WORKDIR /src
 
 RUN apk add --no-cache build-base upx
 ENV CGO_ENABLED=0 GO111MODULE=on
-COPY go.mod go.sum ./
+
+# Build context must be repo root; copy module files with optional sum
+COPY go.mod go.sum* ./
 RUN go mod download
+
 COPY . .
 
 RUN set -eux; \
-  if grep -qE "^[[:space:]]*${SVC}:" Makefile 2>/dev/null; then \
+  if [ -f Makefile ] && grep -qE "^[[:space:]]*${SVC}:" Makefile; then \
       make "${SVC}"; \
       test -f "${BIN_PATH}" || (echo "Expected ${BIN_PATH} after make" && exit 2); \
   else \
