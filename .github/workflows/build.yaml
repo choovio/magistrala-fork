@@ -1,21 +1,24 @@
+# Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
 name: Build & Guards (Adapters)
 
 on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write     # for AWS OIDC
+  id-token: write
   packages: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-  IMAGE_NAMESPACE: magistrala   # adjust if you use a different namespace
-  # Enforce /health usage & legacy header policy by guards below.
+  IMAGE_NAMESPACE: magistrala
 
 concurrency:
   group: build-adapters-${{ github.ref }}
@@ -28,33 +31,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Verify SPDX headers (Abstract Machines in first 5 lines)
         shell: bash
         run: |
           set -euo pipefail
           echo "Checking SPDX headers..."
           FAIL_FILE="$(mktemp)"
-          # File globs to check; extend as needed
-          GLOBS=(
-            "*.go" "*.py" "*.ts" "*.tsx" "*.js" "*.jsx" "*.sh" "Dockerfile" "*.yml" "*.yaml"
-          )
+          GLOBS=( "*.go" "*.py" "*.ts" "*.tsx" "*.js" "*.jsx" "*.sh" "Dockerfile" "*.yml" "*.yaml" )
           mapfile -t FILES < <(git ls-files "${GLOBS[@]}" || true)
           for f in "${FILES[@]}"; do
-            # Read first 5 lines (robust to short files)
             head -n 5 "$f" | awk 'BEGIN{IGNORECASE=1} {print}' > /tmp/head5.txt
-            if ! grep -q "SPDX-License-Identifier:" /tmp/head5.txt; then
-              echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$FAIL_FILE"
-              continue
-            fi
-            if ! grep -q "Copyright (c) .*Abstract Machines" /tmp/head5.txt; then
-              echo "$f: missing required Abstract Machines copyright line in first 5 lines" >> "$FAIL_FILE"
-            fi
+            grep -q "SPDX-License-Identifier:" /tmp/head5.txt || { echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$FAIL_FILE"; continue; }
+            grep -q "Copyright (c) .*Abstract Machines" /tmp/head5.txt || { echo "$f: missing required Abstract Machines copyright line in first 5 lines" >> "$FAIL_FILE"; }
           done
           if [[ -s "$FAIL_FILE" ]]; then
-            echo "::error::License/SPDX header check failed:"
-            cat "$FAIL_FILE"
-            exit 1
+            echo "::error::License/SPDX header check failed:"; cat "$FAIL_FILE"; exit 1
           fi
           echo "SPDX headers look good."
 
@@ -62,11 +53,9 @@ jobs:
     name: SuperMQ patches-only policy
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (full history for diff)
+      - name: Checkout (full history)
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
+        with: { fetch-depth: 0 }
       - name: Enforce patches/ for docker/supermq-docker
         shell: bash
         run: |
@@ -75,14 +64,10 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE_REF="${{ github.event.pull_request.base.sha }}"
           else
-            # Compare against the default branch tip
             BASE_BRANCH="$(git remote show origin | awk '/HEAD branch/ {print $NF}')"
             BASE_REF="origin/${BASE_BRANCH}"
           fi
-          echo "Base for diff: $BASE_REF"
-          git fetch origin +refs/heads/*:refs/remotes/origin/*
-
-          # List changes under docker/supermq-docker excluding patches/**
+          git fetch origin +refs/heads/*:refs/remotes/origin/* >/dev/null 2>&1 || true
           CHANGED=$(git diff --name-only "$BASE_REF"...HEAD -- docker/supermq-docker | grep -v '^docker/supermq-docker/patches/' || true)
           if [[ -n "$CHANGED" ]]; then
             echo "::error::Direct edits under docker/supermq-docker detected (only patches/ are allowed):"
@@ -92,7 +77,7 @@ jobs:
           echo "SuperMQ patches-only policy respected."
 
   build_adapters:
-    name: Build & Push Adapters
+    name: Discover Adapter Contexts
     runs-on: ubuntu-latest
     needs: [license_guard, supermq_patches_guard]
     outputs:
@@ -100,29 +85,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Discover adapter contexts
         id: discover
         shell: bash
         run: |
           set -euo pipefail
-          # Find docker/*adapter* directories containing a Dockerfile
           mapfile -d '' DIRS < <(find docker -maxdepth 1 -type d -name "*adapter*" -print0 2>/dev/null || true)
           INCLUDES=()
           for dir in "${DIRS[@]}"; do
             [[ -f "$dir/Dockerfile" ]] || continue
             name="$(basename "$dir")"
-            # Optional: filter out supermq here if it ever matched
             INCLUDES+=( "$(jq -n --arg context "$dir" --arg name "$name" '{context:$context,name:$name}')" )
           done
           if [[ ${#INCLUDES[@]} -eq 0 ]]; then
-            # Provide an empty include to keep YAML valid; downstream job will skip
             MATRIX='{"include":[]}'
           else
             MATRIX="$(printf '%s\n' "${INCLUDES[@]}" | jq -s '{include: .}')"
           fi
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-          echo "Discovered matrix:"
           echo "$MATRIX" | jq .
 
   build_and_push:
@@ -133,23 +113,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build_adapters.outputs.matrix) }}
+    env:
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME || '' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || '' }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials (OIDC)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -173,7 +157,7 @@ jobs:
           IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.name }}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "tag_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Image will be: ${IMAGE}:${SHORT_SHA} and ${IMAGE}:latest"
+          echo "Using tags: ${IMAGE}:${SHORT_SHA} and ${IMAGE}:latest"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
