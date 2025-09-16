@@ -131,11 +131,11 @@ PY
   build-and-push:
     name: Build & Push (${{ matrix.service }})
     needs: discover-build-contexts
-    if: ${{ fromJson(needs.discover-build-contexts.outputs.count) > 0 }}
+    if: ${{ fromJSON(needs.discover-build-contexts.outputs.count) > 0 }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.discover-build-contexts.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.discover-build-contexts.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
