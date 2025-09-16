@@ -1,50 +1,42 @@
 # Copyright (c) Abstract Machines
-# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # ---- builder ----
-FROM golang:1.22-alpine AS builder
-ARG SVC="http-adapter"
-ARG BIN_PATH="build/${SVC}"
+FROM golang:1.24-alpine AS builder
+
+# Build args (optional)
+ARG GOOS=linux
+ARG GOARCH=amd64
+ARG CGO_ENABLED=0
+
 WORKDIR /src
+RUN apk add --no-cache build-base git upx
 
-# toolchain + upx
-RUN apk add --no-cache build-base upx
-
-# cache-friendly go env
-ENV CGO_ENABLED=0 GO111MODULE=on
-
-# Copy Go module files from the *root* of the repo (requires build context = repo root)
-# go.sum may or may not exist; the wildcard makes it optional.
-COPY go.mod go.sum* ./
-RUN go mod download
-
-# copy the rest of the repo
+# Bring the whole repo as context; avoid brittle COPY order
 COPY . .
 
-# Try make target if it exists; otherwise build from common cmd paths.
+# Prefer Make if present; otherwise search common main paths
 RUN set -eux; \
-  if [ -f Makefile ] && grep -qE "^[[:space:]]*${SVC}:" Makefile; then \
-      make "${SVC}"; \
-      test -f "${BIN_PATH}" || (echo "Expected ${BIN_PATH} after make" && exit 2); \
-  else \
-      mkdir -p build; \
-      if [ -d "./cmd/${SVC}" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./cmd/${SVC}"; \
-      elif [ -d "./${SVC}/cmd" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./${SVC}/cmd"; \
-      elif [ -d "./cmd/http" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./cmd/http"; \
-      else \
-          echo "No build target or cmd path found for ${SVC}"; exit 3; \
-      fi; \
-  fi; \
-  # optional compression
-  upx "${BIN_PATH}" || true
+    if grep -qE '^\s*http-adapter\s*:' Makefile 2>/dev/null; then \
+        make http-adapter; \
+        test -f build/http-adapter; \
+        cp build/http-adapter /exe; \
+    else \
+        for p in ./cmd/http-adapter ./http-adapter ./cmd/http ./services/http-adapter; do \
+            if [ -f "$p/main.go" ] || [ -d "$p" ]; then \
+                GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED="$CGO_ENABLED" \
+                  go build -trimpath -ldflags="-s -w" -o /exe "$p"; \
+                break; \
+            fi; \
+        done; \
+        test -x /exe; \
+    fi; \
+    upx /exe || true
 
-# ---- runner ----
+# ---- runtime ----
 FROM alpine:3.20
-ARG BIN_PATH="build/http-adapter"
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -u 10001 app
+USER 10001:10001
 WORKDIR /
-COPY --from=builder /src/${BIN_PATH} /exe
+COPY --from=builder /exe /exe
 ENTRYPOINT ["/exe"]

@@ -1,43 +1,39 @@
 # Copyright (c) Abstract Machines
-# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # ---- builder ----
-FROM golang:1.22-alpine AS builder
-ARG SVC="ws-adapter"
-ARG BIN_PATH="build/${SVC}"
+FROM golang:1.24-alpine AS builder
+
+ARG GOOS=linux
+ARG GOARCH=amd64
+ARG CGO_ENABLED=0
+
 WORKDIR /src
-
-RUN apk add --no-cache build-base upx
-ENV CGO_ENABLED=0 GO111MODULE=on
-
-# Build context must be repo root; copy module files with optional sum
-COPY go.mod go.sum* ./
-RUN go mod download
+RUN apk add --no-cache build-base git upx
 
 COPY . .
 
 RUN set -eux; \
-  if [ -f Makefile ] && grep -qE "^[[:space:]]*${SVC}:" Makefile; then \
-      make "${SVC}"; \
-      test -f "${BIN_PATH}" || (echo "Expected ${BIN_PATH} after make" && exit 2); \
-  else \
-      mkdir -p build; \
-      if [ -d "./cmd/${SVC}" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./cmd/${SVC}"; \
-      elif [ -d "./${SVC}/cmd" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./${SVC}/cmd"; \
-      elif [ -d "./cmd/ws" ]; then \
-          go build -trimpath -ldflags="-s -w" -o "${BIN_PATH}" "./cmd/ws"; \
-      else \
-          echo "No build target or cmd path found for ${SVC}"; exit 3; \
-      fi; \
-  fi; \
-  upx "${BIN_PATH}" || true
+    if grep -qE '^\s*ws-adapter\s*:' Makefile 2>/dev/null; then \
+        make ws-adapter; \
+        test -f build/ws-adapter; \
+        cp build/ws-adapter /exe; \
+    else \
+        for p in ./cmd/ws-adapter ./ws-adapter ./cmd/ws ./services/ws-adapter; do \
+            if [ -f "$p/main.go" ] || [ -d "$p" ]; then \
+                GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED="$CGO_ENABLED" \
+                  go build -trimpath -ldflags="-s -w" -o /exe "$p"; \
+                break; \
+            fi; \
+        done; \
+        test -x /exe; \
+    fi; \
+    upx /exe || true
 
-# ---- runner ----
+# ---- runtime ----
 FROM alpine:3.20
-ARG BIN_PATH="build/ws-adapter"
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -u 10001 app
+USER 10001:10001
 WORKDIR /
-COPY --from=builder /src/${BIN_PATH} /exe
+COPY --from=builder /exe /exe
 ENTRYPOINT ["/exe"]
