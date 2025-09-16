@@ -20,9 +20,122 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  lint-and-build:
-    name: Lint and Build
+  discover-build-contexts:
+    name: Discover Docker build contexts
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.ctx.outputs.matrix }}
+      count: ${{ steps.ctx.outputs.count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Print context
+        run: |
+          echo "SHA=$GITHUB_SHA"
+          echo "EVENT=${{ github.event_name }}"
+          git describe --always --dirty --tags || true
+
+      - name: Find service Docker contexts (addons + adapters)
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+import textwrap
+exec(textwrap.dedent("""
+    import json, os, pathlib, re, subprocess, sys
+
+    allow_missing = {"http-adapter", "ws-adapter"}
+
+    def git_ls(pattern: str):
+        proc = subprocess.run(
+            ["git", "ls-files", pattern],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if proc.returncode not in (0, 1):
+            print(proc.stderr, file=sys.stderr)
+            sys.exit(proc.returncode)
+        return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    dockerfiles = git_ls("docker/addons/**/Dockerfile")
+    filtered = [
+        path for path in dockerfiles
+        if not re.search(r"docker/addons/(http-adapter|ws-adapter)/Dockerfile$", path)
+    ]
+    contexts = {str(pathlib.Path(path).parent) for path in filtered}
+
+    for extra in ("docker/http-adapter", "docker/ws-adapter"):
+        if pathlib.Path(extra, "Dockerfile").is_file():
+            contexts.add(extra)
+
+    contexts = sorted(contexts)
+    makefile = pathlib.Path("Makefile")
+    make_text = makefile.read_text() if makefile.exists() else ""
+    include = []
+    skipped = []
+
+    for ctx in contexts:
+        dockerfile_path = pathlib.Path(ctx) / "Dockerfile"
+        if not dockerfile_path.is_file():
+            skipped.append((ctx, "missing Dockerfile"))
+            continue
+
+        service = pathlib.Path(ctx).name
+        if not re.search(rf"^\\s*{re.escape(service)}:", make_text, re.MULTILINE):
+            if service not in allow_missing:
+                skipped.append((service, "no Makefile target"))
+                continue
+
+        if service == "http-adapter":
+            context_path = "."
+            dockerfile = "docker/http-adapter/Dockerfile"
+        elif service == "ws-adapter":
+            context_path = "."
+            dockerfile = "docker/ws-adapter/Dockerfile"
+        else:
+            context_path = ctx
+            dockerfile = str(dockerfile_path)
+
+        include.append({
+            "service": service,
+            "context": context_path,
+            "dockerfile": dockerfile,
+        })
+
+    matrix = {"include": include}
+    print(f"Discovered {len(include)} build context(s).")
+    for entry in include:
+        print(f"- {entry['service']}: context={entry['context']} dockerfile={entry['dockerfile']}")
+    if skipped:
+        print("Skipped entries:")
+        for name, reason in skipped:
+            print(f"  - {name}: {reason}")
+
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write(f"matrix={json.dumps(matrix)}\n")
+            fh.write(f"count={len(include)}\n")
+    else:
+        print("matrix=", json.dumps(matrix), sep="")
+        print("count=", len(include), sep="")
+"""))
+PY
+
+  build-and-push:
+    name: Build & Push (${{ matrix.service }})
+    needs: discover-build-contexts
+    if: ${{ fromJson(needs.discover-build-contexts.outputs.count) > 0 }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover-build-contexts.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,7 +166,6 @@ jobs:
           echo "image_prefix=$IMAGE_PREFIX" >> $GITHUB_OUTPUT
           echo "sha8=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      # Export optional AWS secrets to env so we can gate on env (safe for PRs from forks)
       - name: Export optional AWS config to env
         run: |
           echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> $GITHUB_ENV
@@ -87,101 +199,44 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Find service Docker contexts (addons + adapters)
-        id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-          declare -a contexts=()
-
-          while IFS= read -r dockerfile; do
-            contexts+=("${dockerfile%/Dockerfile}")
-          done < <(git ls-files 'docker/addons/**/Dockerfile' \
-            | grep -vE 'docker/addons/(http-adapter|ws-adapter)/Dockerfile' \
-            | sort -u || true)
-
-          for extra in docker/http-adapter docker/ws-adapter; do
-            if git ls-files --error-unmatch "${extra}/Dockerfile" >/dev/null 2>&1; then
-              contexts+=("${extra}")
-            fi
-          done
-
-          if [ "${#contexts[@]}" -gt 0 ]; then
-            mapfile -t contexts < <(printf '%s\n' "${contexts[@]}" | sort -u)
-          fi
-
-          printf 'found %s candidate contexts\n' "${#contexts[@]}"
-          printf '%s\n' "${contexts[@]}" | nl -ba || true
-
-          if [ "${#contexts[@]}" -gt 0 ]; then
-            printf '%s\n' "${contexts[@]}" > contexts.txt
-          else
-            : > contexts.txt
-          fi
-
-      - name: Build & Push
+      - name: Build and push
+        id: build
         env:
           REGISTRY: ${{ steps.reg.outputs.registry }}
           ORG: ${{ steps.reg.outputs.org }}
           IMAGE_PREFIX: ${{ steps.reg.outputs.image_prefix }}
           SHA8: ${{ steps.reg.outputs.sha8 }}
-        shell: bash
+          CONTEXT: ${{ matrix.context }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          SERVICE: ${{ matrix.service }}
         run: |
           set -euo pipefail
-          if [ ! -s contexts.txt ]; then
-            echo "No service contexts found. Nothing to build."
-            exit 0
+          if [ -n "$ORG" ]; then
+            IMAGE_TAG="$REGISTRY/$ORG/$IMAGE_PREFIX:${SERVICE}-${SHA8}"
+          else
+            IMAGE_TAG="$REGISTRY/$IMAGE_PREFIX:${SERVICE}-${SHA8}"
           fi
+          echo "== Building ${SERVICE} (Dockerfile: ${DOCKERFILE}) from ${CONTEXT} -> ${IMAGE_TAG}"
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg SVC="${SERVICE}" \
+            --file "${DOCKERFILE}" \
+            --tag "${IMAGE_TAG}" \
+            --push \
+            "${CONTEXT}"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
-          allow_missing_targets=(http-adapter ws-adapter)
-
-          while IFS= read -r ctx; do
-            [[ -n "$ctx" ]] || continue
-            name="$(basename "$ctx")"
-
-            skip_target_check=no
-            for svc in "${allow_missing_targets[@]}"; do
-              if [ "$name" = "$svc" ]; then
-                skip_target_check=yes
-                break
-              fi
-            done
-
-            if ! grep -Eq "^[[:space:]]*${name}:" Makefile; then
-              if [ "$skip_target_check" = yes ]; then
-                echo "Allowing $name without Makefile target (dedicated adapter Dockerfile)"
-              else
-                echo "Skip $name (no matching 'make ${name}' target)"; continue
-              fi
-            fi
-
-            dockerfile_path="${ctx}/Dockerfile"
-            if [ ! -f "$dockerfile_path" ]; then
-              echo "Skip $name (no Dockerfile at $dockerfile_path)"; continue
-            fi
-
-            # Compose GHCR target
-            if [ -n "$ORG" ]; then
-              ghcr_img="$REGISTRY/$ORG/$IMAGE_PREFIX:${name}-${SHA8}"
-            else
-              ghcr_img="$REGISTRY/$IMAGE_PREFIX:${name}-${SHA8}"
-            fi
-
-            echo "== Building $name from $ctx (Dockerfile: $dockerfile_path) → $ghcr_img"
-            docker buildx build \
-              --platform linux/amd64 \
-              --build-arg SVC="$name" \
-              -f "$dockerfile_path" \
-              -t "$ghcr_img" \
-              "$ctx" \
-              --push
-
-            # Optional ECR mirror (only if AWS creds present)
-            if [ -n "${ECR_REG:-}" ]; then
-              ecr_img="$ECR_REG/${IMAGE_PREFIX}:${name}-${SHA8}"
-              echo "Mirroring to $ecr_img"
-              docker pull "$ghcr_img"
-              docker tag "$ghcr_img" "$ecr_img"
-              docker push "$ecr_img"
-            fi
-          done < contexts.txt
+      - name: Mirror to ECR (optional)
+        if: ${{ env.ECR_REG != '' }}
+        env:
+          IMAGE_TAG: ${{ steps.build.outputs.image_tag }}
+          IMAGE_PREFIX: ${{ steps.reg.outputs.image_prefix }}
+          SERVICE: ${{ matrix.service }}
+          SHA8: ${{ steps.reg.outputs.sha8 }}
+        run: |
+          set -euo pipefail
+          ECR_IMG="$ECR_REG/${IMAGE_PREFIX}:${SERVICE}-${SHA8}"
+          echo "Mirroring to $ECR_IMG"
+          docker pull "$IMAGE_TAG"
+          docker tag "$IMAGE_TAG" "$ECR_IMG"
+          docker push "$ECR_IMG"

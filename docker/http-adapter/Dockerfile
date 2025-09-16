@@ -13,17 +13,18 @@ RUN apk add --no-cache build-base upx
 
 # cache-friendly go env
 ENV CGO_ENABLED=0 GO111MODULE=on
-COPY go.mod go.sum ./
+
+# Copy Go module files from the *root* of the repo (requires build context = repo root)
+# go.sum may or may not exist; the wildcard makes it optional.
+COPY go.mod go.sum* ./
 RUN go mod download
 
-# copy rest
+# copy the rest of the repo
 COPY . .
 
-# If a Makefile has a matching target, use it; otherwise build from a conventional cmd path.
-# Try common locations: ./cmd/http-adapter or ./http-adapter/cmd or ./cmd/http
-# Adjust/add more paths later if your repo differs.
+# Try make target if it exists; otherwise build from common cmd paths.
 RUN set -eux; \
-  if grep -qE "^[[:space:]]*${SVC}:" Makefile 2>/dev/null; then \
+  if [ -f Makefile ] && grep -qE "^[[:space:]]*${SVC}:" Makefile; then \
       make "${SVC}"; \
       test -f "${BIN_PATH}" || (echo "Expected ${BIN_PATH} after make" && exit 2); \
   else \
