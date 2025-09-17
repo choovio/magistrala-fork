@@ -15,3 +15,8 @@ coverage
 
 # Schemathesis
 .hypothesis
+
+
+# Audit: ignore local backup artifacts
+*.bak
+ops/ci/registry.env.bak
