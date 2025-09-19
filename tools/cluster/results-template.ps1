@@ -1,5 +1,6 @@
 # Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+
 Set-StrictMode -Version Latest
 
 function Emit-Results {
