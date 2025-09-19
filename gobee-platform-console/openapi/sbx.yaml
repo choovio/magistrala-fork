@@ -3,22 +3,20 @@ openapi: 3.1.0
 info:
   title: SBX API (GoBee Console Contract Seed)
   version: 0.1.0
-  description: >-
-    Minimal seed contract describing the sandbox (SBX) API surface that the GoBee
-    console relies on. The document intentionally mirrors Magistrala semantics
-    while allowing the console to evolve independently.
+  description: |
+    Minimal contract seed to eliminate guesswork while wiring the console.
+    NOTE: This file contains placeholders clearly labeled **TBD**. Replace with
+    upstream-verified fields once SBX confirms the contract.
 
 servers:
   - url: https://sbx.gobee.io/api
     description: SBX upstream (default)
   - url: /api/sbx
-    description: GoBee Console proxy (local/dev)
+    description: GoBee Console proxy (local/dev via Next.js route)
 
 tags:
   - name: Health
-    description: Liveness/readiness probes for the console surface.
   - name: Devices
-    description: Device inventory operations exposed via the console.
 
 paths:
   /health:
@@ -28,12 +26,11 @@ paths:
       operationId: getHealth
       responses:
         '200':
-          description: Service is reachable and responding.
+          description: OK
           content:
             text/plain:
               schema:
                 type: string
-                enum: [ok]
                 example: ok
 
   /devices:
@@ -41,157 +38,173 @@ paths:
       tags: [Devices]
       summary: List devices (paginated)
       operationId: listDevices
+      security:
+        - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
         - name: limit
           in: query
-          description: Maximum number of devices to return.
+          required: false
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 25
-        - name: offset
+        - name: q
           in: query
-          description: Zero-based offset for pagination.
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-        - name: status
-          in: query
-          description: Filter devices by status (e.g., active, inactive).
+          required: false
           schema:
             type: string
-            enum: [active, inactive, provisioning]
-        - name: tag
+        - name: sort
           in: query
-          description: Filter devices that contain the provided tag.
+          required: false
+          schema:
+            type: string
+            enum: [name, lastSeen, status]
+            default: name
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicesPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /devices/{id}:
+    get:
+      tags: [Devices]
+      summary: Get a device by ID
+      operationId: getDevice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
       responses:
         '200':
-          description: A paginated list of devices.
-          headers:
-            X-Total-Count:
-              description: Total number of devices matching the filter.
-              schema:
-                type: integer
+          description: Device found
           content:
             application/json:
               schema:
-                type: object
-                required: [items, offset, limit]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Device'
-                  offset:
-                    type: integer
-                    minimum: 0
-                  limit:
-                    type: integer
-                    minimum: 1
-                  nextOffset:
-                    type: integer
-                    minimum: 0
-                    nullable: true
-        '400':
-          description: Invalid pagination or filter parameters supplied.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: '#/components/schemas/Device'
         '401':
-          description: Authentication required or token expired.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Caller lacks sufficient permissions to view devices.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
-          description: Unexpected upstream failure.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-            application/json:
-              schema:
-                type: object
-                required: [items, offset, limit]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Device'
-                  offset:
-                    type: integer
-                    minimum: 0
-                  limit:
-                    type: integer
-                    minimum: 1
-                  nextOffset:
-                    type: integer
-                    minimum: 0
-                    nullable: true
+          $ref: '#/components/responses/ServerError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XTenantId:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        example: dev-tenant-123
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
+    DevicesPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        nextCursor:
+          type: string
+          nullable: true
+        total:
+          type: integer
+          nullable: true
+      required: [items]
+
     Device:
       type: object
-      required: [id, name, status, createdAt]
       properties:
         id:
           type: string
-          description: Stable Magistrala device identifier.
         name:
           type: string
-          description: Friendly device display name.
         status:
+          $ref: '#/components/schemas/DeviceStatus'
+        lastSeen:
           type: string
-          description: Current lifecycle state.
-          enum: [active, inactive, provisioning]
+          format: date-time
+          nullable: true
         tags:
           type: array
-          description: Optional classification tags associated with the device.
-          items:
-            type: string
+          items: { type: string }
+          default: []
         metadata:
           type: object
-          additionalProperties:
-            type: string
-          description: Arbitrary metadata forwarded by Magistrala.
-        createdAt:
-          type: string
-          format: date-time
-          description: ISO-8601 creation timestamp.
-        updatedAt:
-          type: string
-          format: date-time
-          description: ISO-8601 last update timestamp.
-    Problem:
+          additionalProperties: true
+      required: [id, name, status]
+
+    DeviceStatus:
+      type: string
+      enum: [online, offline, unknown]
+
+    Error:
       type: object
-      required: [type, title, status]
       properties:
-        type:
+        error:
           type: string
-          format: uri-reference
-          description: Problem type identifier.
-        title:
-          type: string
-          description: Short, human-readable summary of the problem.
-        status:
-          type: integer
-          description: HTTP status code generated by the origin server.
-        detail:
-          type: string
-          description: Additional diagnostic information about the failure.
-        instance:
-          type: string
-          format: uri-reference
-          description: Correlation URI identifying this occurrence of the problem.
+      required: [error]
