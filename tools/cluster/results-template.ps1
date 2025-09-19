@@ -4,7 +4,7 @@
 Set-StrictMode -Version Latest
 
 function Emit-Results {
-    param([Parameter(Mandatory)][hashtable]$Data)
+    param([Parameter(Mandatory)][hashtable]$Fields)
     $esc    = [char]27
     $orange = "$esc[38;5;208m"
     $reset  = "$esc[0m"
@@ -13,8 +13,8 @@ function Emit-Results {
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add('==== RESULTS ====')
     foreach ($k in $allowed) {
-        if ($Data.ContainsKey($k) -and $null -ne $Data[$k] -and "$($Data[$k])".Trim()) {
-            $v = $Data[$k]
+        if ($Fields.ContainsKey($k) -and $null -ne $Fields[$k] -and "$($Fields[$k])".Trim()) {
+            $v = $Fields[$k]
             if ($v -is [System.Collections.IEnumerable] -and -not ($v -is [string])) {
                 $v = ($v | ForEach-Object { "$_" }) -join ', '
             }
@@ -24,3 +24,4 @@ function Emit-Results {
     $lines.Add('==== END RESULTS ====')
     Write-Host ($orange + ($lines -join [Environment]::NewLine) + $reset)
 }
+Export-ModuleMember -Function Emit-Results
