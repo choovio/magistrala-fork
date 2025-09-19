@@ -1,3 +1,7 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+# Purpose: SBX backend contract for frontend integration
+
 # GoBee SBX Backend Contract (Magistrala-based)
 
 > **Purpose:** Single source of truth for the Next.js frontend to integrate with SBX.  
