@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
-#
-# Copyright (c) Abstract Machines
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
-#
 
 ###
 # Provisions example user, client and channel on a clean SuperMQ installation.
-#
 # Expects a running SuperMQ installation.
-#
-#
 ###
 
 if [ $# -lt 4 ]

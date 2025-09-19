@@ -44,5 +44,3 @@ services:
       - ./configs:/configs
       - ../../ssl/certs/ca.key:/etc/ssl/certs/ca.key
       - ../../ssl/certs/ca.crt:/etc/ssl/certs/ca.crt
-
-

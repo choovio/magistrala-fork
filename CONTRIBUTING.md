@@ -1,7 +1,7 @@
 # Contributing to Magistrala
 
 The following is a set of guidelines to contribute to Magistrala and its libraries, which are
-hosted on the [Abstract Machines Organization](https://github.com/absmach) on GitHub.
+hosted on the [CHOOVIO Organization](https://github.com/choovio) on GitHub.
 
 This project adheres to the [Contributor Covenant 1.2](http://contributor-covenant.org/version/1/2/0).
 By participating, you are expected to uphold this code. Please report unacceptable behavior to

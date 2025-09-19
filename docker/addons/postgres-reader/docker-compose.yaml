@@ -120,5 +120,3 @@ services:
         target: /readers-grpc-client${MG_POSTGRES_READER_GRPC_CLIENT_KEY:+.key}
         bind:
           create_host_path: true
-
-

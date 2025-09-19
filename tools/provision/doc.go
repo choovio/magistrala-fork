@@ -1,5 +1,5 @@
-// Copyright (c) Abstract Machines
-// SPDX-License-Identifier: Apache-2.0
+// # Copyright (c) CHOOVIO Inc.
+// # SPDX-License-Identifier: Apache-2.0
 
 // Package provision is a simple utility to create
 // a list of channels and clients connected to these channels

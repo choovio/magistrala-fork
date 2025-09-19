@@ -15,7 +15,7 @@
   
   ### [Guide](https://docs.magistrala.abstractmachines.fr) | [Contributing](CONTRIBUTING.md) | [Website](https://abstractmachines.fr/magistrala.html) | [Chat](https://matrix.to/#/#magistrala:matrix.org)
 
-  Made with ❤️ by [Abstract Machines](https://abstractmachines.fr/)
+  Made with ❤️ by [CHOOVIO](https://www.choovio.com/)
 
 </div>
 
@@ -115,4 +115,4 @@ Magistrala is open-source software licensed under the [Apache-2.0](LICENSE) lice
 
 ## 💼 Professional Support
 
-Need help deploying Magistrala or integrating it into your systems? Contact **[Abstract Machines](https://abstractmachines.fr/)** for expert guidance and support.
+Need help deploying Magistrala or integrating it into your systems? Contact **CHOOVIO** for expert guidance and support.

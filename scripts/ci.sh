@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) Abstract Machines
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 # This script contains commands to be executed by the CI tool.

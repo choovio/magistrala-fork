@@ -457,5 +457,3 @@ services:
       - "4000:3000"
     networks:
       - magistrala-base-net
-
-
