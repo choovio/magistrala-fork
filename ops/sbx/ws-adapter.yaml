@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: ws-adapter
-          image: ghcr.io/choovio/ws-adapter:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
