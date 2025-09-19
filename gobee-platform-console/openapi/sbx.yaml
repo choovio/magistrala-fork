@@ -1,5 +1,6 @@
 # Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+
 # Purpose: SBX OpenAPI seed contract for console integration
 
 openapi: 3.1.0
