@@ -1,0 +1,197 @@
+# SPDX-License-Identifier: MIT
+openapi: 3.1.0
+info:
+  title: SBX API (GoBee Console Contract Seed)
+  version: 0.1.0
+  description: >-
+    Minimal seed contract describing the sandbox (SBX) API surface that the GoBee
+    console relies on. The document intentionally mirrors Magistrala semantics
+    while allowing the console to evolve independently.
+
+servers:
+  - url: https://sbx.gobee.io/api
+    description: SBX upstream (default)
+  - url: /api/sbx
+    description: GoBee Console proxy (local/dev)
+
+tags:
+  - name: Health
+    description: Liveness/readiness probes for the console surface.
+  - name: Devices
+    description: Device inventory operations exposed via the console.
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is reachable and responding.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [ok]
+                example: ok
+
+  /devices:
+    get:
+      tags: [Devices]
+      summary: List devices (paginated)
+      operationId: listDevices
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of devices to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: offset
+          in: query
+          description: Zero-based offset for pagination.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: status
+          in: query
+          description: Filter devices by status (e.g., active, inactive).
+          schema:
+            type: string
+            enum: [active, inactive, provisioning]
+        - name: tag
+          in: query
+          description: Filter devices that contain the provided tag.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A paginated list of devices.
+          headers:
+            X-Total-Count:
+              description: Total number of devices matching the filter.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, offset, limit]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                  nextOffset:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+        '400':
+          description: Invalid pagination or filter parameters supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Authentication required or token expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Caller lacks sufficient permissions to view devices.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Unexpected upstream failure.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+            application/json:
+              schema:
+                type: object
+                required: [items, offset, limit]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  offset:
+                    type: integer
+                    minimum: 0
+                  limit:
+                    type: integer
+                    minimum: 1
+                  nextOffset:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+
+components:
+  schemas:
+    Device:
+      type: object
+      required: [id, name, status, createdAt]
+      properties:
+        id:
+          type: string
+          description: Stable Magistrala device identifier.
+        name:
+          type: string
+          description: Friendly device display name.
+        status:
+          type: string
+          description: Current lifecycle state.
+          enum: [active, inactive, provisioning]
+        tags:
+          type: array
+          description: Optional classification tags associated with the device.
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary metadata forwarded by Magistrala.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO-8601 creation timestamp.
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 last update timestamp.
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: Problem type identifier.
+        title:
+          type: string
+          description: Short, human-readable summary of the problem.
+        status:
+          type: integer
+          description: HTTP status code generated by the origin server.
+        detail:
+          type: string
+          description: Additional diagnostic information about the failure.
+        instance:
+          type: string
+          format: uri-reference
+          description: Correlation URI identifying this occurrence of the problem.
