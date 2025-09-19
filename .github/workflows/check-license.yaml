@@ -25,8 +25,13 @@ jobs:
             --exclude=\*.{crt,key,pem,zed,hcl,md,json,csv,mod,sum,tmpl,args} \
             --exclude={CODEOWNERS,LICENSE,MAINTAINERS,enabled_plugins,rabbitmq.conf} \
             .); do
-              
-              if ! head -n 5 "$file" | grep -q "Copyright (c) Abstract Machines"; then
+
+              if ! head -n 5 "$file" | grep -Fq "Copyright (c) CHOOVIO Inc."; then
+                CHECK="$CHECK $file"
+                continue
+              fi
+
+              if ! head -n 5 "$file" | grep -Fq "SPDX-License-Identifier: Apache-2.0"; then
                 CHECK="$CHECK $file"
               fi
           done
