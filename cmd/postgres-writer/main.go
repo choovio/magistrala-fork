@@ -1,5 +1,5 @@
-// Copyright (c) Abstract Machines
-// SPDX-License-Identifier: Apache-2.0
+// # Copyright (c) CHOOVIO Inc.
+// # SPDX-License-Identifier: Apache-2.0
 
 // Package main contains postgres-writer main function to start the postgres-writer service.
 package main

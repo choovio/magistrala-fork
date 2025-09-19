@@ -1,5 +1,5 @@
 #!/bin/ash
-# Copyright (c) Abstract Machines
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 if [ -z "$SMQ_MQTT_CLUSTER" ]; then

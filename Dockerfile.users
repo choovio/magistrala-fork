@@ -1,10 +1,6 @@
-# Copyright (c) Abstract Machines
-# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-# SPDX-License-Identifier: MIT
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2025 CHOOVIO Inc.
-
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+
 # syntax=docker/dockerfile:1.7
 
 FROM golang:1.24.5-bookworm AS builder

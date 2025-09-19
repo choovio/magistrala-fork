@@ -1,5 +1,5 @@
-## Copyright (c) Abstract Machines
-## SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 ## Script used to generate random data to do testing the timescaledb "messages" table
 ## The script generate CSV file, which can be loaded into data base using the below command
@@ -66,5 +66,3 @@ with open(data_file_path, 'w') as f:
             f.write(f"{timestamp_ns},{row['channel']},{row['subtopic']},{row['publisher']},mqtt,{row['name']},unit,{value}\n")
 
 print(f"Finished writing CSV at {data_file_path} with {len(rows) * num_intervals} rows = {len(rows)} unique metrics (channel + subtopic + publisher + metric) x {num_intervals} timestamps")
-
-

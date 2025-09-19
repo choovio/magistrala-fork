@@ -63,5 +63,3 @@ services:
       - magistrala-base-net
     volumes:
       - ./config.toml:/config.toml
-
-

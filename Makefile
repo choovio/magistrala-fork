@@ -1,4 +1,4 @@
-# Copyright (c) Abstract Machines
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 REGISTRY ?= $(shell sed -n 's/^REGISTRY=//p' ops/ci/registry.env)
