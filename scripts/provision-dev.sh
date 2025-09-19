@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-#
-# Copyright (c) Abstract Machines
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
 

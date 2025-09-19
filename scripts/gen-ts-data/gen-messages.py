@@ -1,5 +1,5 @@
-## Copyright (c) Abstract Machines
-## SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 ## Script used to generate random data to do testing the timescaledb "messages" table
 ## The script generate CSV file, which can be loaded into data base using the below command

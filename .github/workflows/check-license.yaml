@@ -26,7 +26,7 @@ jobs:
             --exclude={CODEOWNERS,LICENSE,MAINTAINERS,enabled_plugins,rabbitmq.conf} \
             .); do
               
-              if ! head -n 5 "$file" | grep -q "Copyright (c) Abstract Machines"; then
+              if ! head -n 5 "$file" | grep -q "Copyright (c) CHOOVIO Inc."; then
                 CHECK="$CHECK $file"
               fi
           done

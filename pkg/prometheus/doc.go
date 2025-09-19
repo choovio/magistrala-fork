@@ -1,4 +1,4 @@
-// Copyright (c) Abstract Machines
+// Copyright (c) CHOOVIO Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package prometheus provides a framework for defining and collecting metrics

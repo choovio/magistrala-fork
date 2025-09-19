@@ -1,4 +1,4 @@
-// Copyright (c) Abstract Machines
+// Copyright (c) CHOOVIO Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main contains reports main function to start the service.
