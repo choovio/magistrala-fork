@@ -3,29 +3,6 @@
 
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.24.5-bookworm AS builder
-ARG BUILD_PACKAGE=./cmd/certs
-ARG BIN_NAME=certs
-ARG VERSION=dev
-ARG COMMIT=unknown
-ARG BUILD_DATE=unknown
-ENV GO111MODULE=on CGO_ENABLED=0 GOTOOLCHAIN=auto
-WORKDIR /src
-
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-RUN go list "${BUILD_PACKAGE}"
-
-RUN go build -trimpath -buildvcs=false \
-  -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
-  -o /out/${BIN_NAME} "${BUILD_PACKAGE}"
-
-FROM gcr.io/distroless/base-debian12:nonroot AS runtime
-ENV PORT=8080
-EXPOSE 8080
-ENV GIN_MODE=release
-COPY --from=builder /out/certs /app/certs
+# The certificates service binary is no longer built from this repository.
+FROM gcr.io/distroless/base-debian12:nonroot
 USER nonroot:nonroot
-ENTRYPOINT ["/app/certs"]
