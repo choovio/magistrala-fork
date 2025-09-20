@@ -1,0 +1,304 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: magistrala
+  labels:
+    app.kubernetes.io/name: magistrala
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: infrastructure
+    app.kubernetes.io/part-of: magistrala
+  annotations:
+    magistrala.io/component: nats
+    magistrala.io/tier: infrastructure
+    magistrala.io/version: "1"
+data:
+  nats.conf: |
+    server_name: "nats_internal_broker"
+    max_payload: 10485760
+    max_connections: 1000000
+    port: 4222
+    http_port: 8222
+    trace: true
+
+    jetstream {
+        store_dir: "/data"
+        cipher: "aes"
+        key: "0123456789ABCDEF0123456789ABCDEF"
+        max_mem: 1073741824
+    }
+
+    mqtt {
+        port: 1883
+        max_ack_pending: 1
+    }
+
+    websocket {
+        port: 8080
+        no_tls: true
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: infrastructure
+    app.kubernetes.io/part-of: magistrala
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nats
+        app.kubernetes.io/component: infrastructure
+        app.kubernetes.io/part-of: magistrala
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.10.25-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-c"
+            - "/etc/nats/nats.conf"
+          ports:
+            - name: client
+              containerPort: 4222
+            - name: monitoring
+              containerPort: 8222
+            - name: mqtt
+              containerPort: 1883
+            - name: websocket
+              containerPort: 8080
+          volumeMounts:
+            - name: nats-config
+              mountPath: /etc/nats
+            - name: nats-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: nats-config
+          configMap:
+            name: nats-config
+            items:
+              - key: nats.conf
+                path: nats.conf
+        - name: nats-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: infrastructure
+    app.kubernetes.io/part-of: magistrala
+spec:
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+    - name: monitoring
+      port: 8222
+      targetPort: monitoring
+    - name: mqtt
+      port: 1883
+      targetPort: mqtt
+    - name: websocket
+      port: 8080
+      targetPort: websocket
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: http-adapter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: http-adapter
+        app.kubernetes.io/component: adapter
+        app.kubernetes.io/part-of: magistrala
+    spec:
+      containers:
+        - name: http-adapter
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/http-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3ffffffffffffffffffffff
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: SMQ_HTTP_ADAPTER_HOST
+              value: "0.0.0.0"
+            - name: SMQ_HTTP_ADAPTER_PORT
+              value: "80"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  selector:
+    app.kubernetes.io/name: http-adapter
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: http-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/http-adapter
+            pathType: Prefix
+            backend:
+              service:
+                name: http-adapter
+                port:
+                  name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ws-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: ws-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ws-adapter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ws-adapter
+        app.kubernetes.io/component: adapter
+        app.kubernetes.io/part-of: magistrala
+    spec:
+      containers:
+        - name: ws-adapter
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3ffffffffffffffffffffff
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: websocket
+              containerPort: 8186
+          env:
+            - name: SMQ_WS_ADAPTER_PORT
+              value: "8186"
+            - name: SMQ_WS_ADAPTER_LOG_LEVEL
+              value: "info"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: websocket
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: websocket
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ws-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: ws-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  selector:
+    app.kubernetes.io/name: ws-adapter
+  ports:
+    - name: websocket
+      port: 8186
+      targetPort: websocket
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ws-adapter
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: ws-adapter
+    app.kubernetes.io/component: adapter
+    app.kubernetes.io/part-of: magistrala
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/ws-adapter
+            pathType: Prefix
+            backend:
+              service:
+                name: ws-adapter
+                port:
+                  name: websocket
