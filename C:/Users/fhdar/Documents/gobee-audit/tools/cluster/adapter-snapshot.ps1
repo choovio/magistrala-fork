@@ -23,6 +23,8 @@ param(
 )
 
 $AWS_ACCOUNT_ID = "595443389404"
+$HttpAdapterRepo = "$AWS_ACCOUNT_ID.dkr.ecr.$Region.amazonaws.com/choovio/magistrala/http-adapter"
+$WsAdapterRepo   = "$AWS_ACCOUNT_ID.dkr.ecr.$Region.amazonaws.com/choovio/magistrala/ws-adapter"
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -40,14 +42,14 @@ function Get-AdapterCatalog {
       Description  = "HTTP protocol adapter"
       Repository   = "choovio/magistrala/http-adapter"
       RegistryUri  = $registryUri
-      ExpectedUri  = "$registryUri/choovio/magistrala/http-adapter"
+      ExpectedUri  = $HttpAdapterRepo
     }
     "ws-adapter" = [pscustomobject]@{
       Name         = "ws-adapter"
       Description  = "WebSocket protocol adapter"
       Repository   = "choovio/magistrala/ws-adapter"
       RegistryUri  = $registryUri
-      ExpectedUri  = "$registryUri/choovio/magistrala/ws-adapter"
+      ExpectedUri  = $WsAdapterRepo
     }
   }
 }

@@ -151,8 +151,11 @@ function Emit-Results {
   Write-Host "NonECRCount: $nonEcrCount"
   Write-Host "NonECRComponents: $nonEcrComponents"
   Write-Host "DuplicateDigestsByComponent: $dupList"
+  $policyAccount = if ($using:EcrAccount) { $using:EcrAccount } else { $AWS_ACCOUNT_ID }
+  $policyRegistry = "$policyAccount.dkr.ecr.$($using:EcrRegion).amazonaws.com"
+
   Write-Host "TopTagOffenders: $tagSummary"
-  Write-Host "Policy: Require ECR ($($using:EcrAccount).dkr.ecr.$($using:EcrRegion).amazonaws.com) + @sha256 digests"
+  Write-Host "Policy: Require ECR ($policyRegistry) + @sha256 digests"
   Write-Host "TIMESTAMP: $ts"
   Write-Host $reset
 }
