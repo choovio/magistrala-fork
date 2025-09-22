@@ -1,0 +1,100 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+# Purpose: Build & push http-adapter and ws-adapter images from magistrala-fork to ECR with digest output.
+
+name: adapters-ecr
+
+on:
+  push:
+    branches:
+      - main
+      - sbx/**
+      - release/**
+    paths:
+      - 'adapters/http/**'
+      - 'adapters/ws/**'
+      - '.github/workflows/adapters-ecr.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  ECR_ACCOUNT_ID: 595443389404
+  HTTP_REPO: http-adapter
+  WS_REPO: ws-adapter
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -------- http-adapter --------
+      - name: Build & push http-adapter
+        id: http
+        working-directory: adapters/http
+        run: |
+          set -euo pipefail
+          REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          IMAGE="$REG/${{ env.HTTP_REPO }}"
+          docker buildx build --platform linux/amd64 -t "$IMAGE:ci-${GITHUB_SHA::12}" --push .
+          # Resolve digest for the just-pushed tag
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${{ env.HTTP_REPO }}" \
+            --image-ids imageTag=ci-${GITHUB_SHA::12} \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
+
+      # -------- ws-adapter --------
+      - name: Build & push ws-adapter
+        id: ws
+        working-directory: adapters/ws
+        run: |
+          set -euo pipefail
+          REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          IMAGE="$REG/${{ env.WS_REPO }}"
+          docker buildx build --platform linux/amd64 -t "$IMAGE:ci-${GITHUB_SHA::12}" --push .
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${{ env.WS_REPO }}" \
+            --image-ids imageTag=ci-${GITHUB_SHA::12} \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize digests (annotated)
+        run: |
+          echo "## Adapter image digests" >> $GITHUB_STEP_SUMMARY
+          echo "- http-adapter: ${{ steps.http.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ws-adapter:   ${{ steps.ws.outputs.image }}"   >> $GITHUB_STEP_SUMMARY
+
+      - name: Emit RESULTS block (for copy/paste)
+        run: |
+          esc=$'\033'
+          orange="${esc}[38;5;214m"; reset="${esc}[0m"
+          ts="$(date '+%Y-%m-%d %H:%M:%S %z')"
+          {
+            echo "==== RESULTS ===="
+            echo "Action: BuildAndPushAdapters"
+            echo "HttpImage: ${{ steps.http.outputs.image }}"
+            echo "WsImage:   ${{ steps.ws.outputs.image }}"
+            echo "TIMESTAMP: $ts"
+            echo "==== END RESULTS ===="
+          } | sed "1s/^/${orange}/;$ s/$/${reset}/"
