@@ -3,10 +3,12 @@
 # Purpose: Inspect running pods in SBX, summarize image sources (ECR vs others),
 #          detect tag-based images, duplicate digests per component, and emit orange RESULTS.
 
+$AWS_ACCOUNT_ID = "595443389404"
+
 [CmdletBinding()]
 param(
   [string]$Namespace = "magistrala",
-  [string]$EcrAccount = "595443389404",
+  [string]$EcrAccount = $AWS_ACCOUNT_ID,
   [string]$EcrRegion = "us-west-2",
   [switch]$WriteCsv,                    # optional: writes /mnt/audit-images.csv in repo root
   [string]$CsvPath = ".\audit-images.csv"
