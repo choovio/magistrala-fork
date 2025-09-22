@@ -22,16 +22,18 @@ param(
   [switch]$Quiet
 )
 
+# AWS Account constant (baked for audit)
 $AWS_ACCOUNT_ID = "595443389404"
-$HttpAdapterRepo = "$AWS_ACCOUNT_ID.dkr.ecr.$Region.amazonaws.com/choovio/magistrala/http-adapter"
-$WsAdapterRepo   = "$AWS_ACCOUNT_ID.dkr.ecr.$Region.amazonaws.com/choovio/magistrala/ws-adapter"
+$EcrHost = "$AWS_ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com"
+$HttpAdapterRepo = "$EcrHost/choovio/magistrala/http-adapter"
+$WsAdapterRepo   = "$EcrHost/choovio/magistrala/ws-adapter"
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-EcrRegistryUri {
   param([string]$Region)
-  "$AWS_ACCOUNT_ID.dkr.ecr.$Region.amazonaws.com"
+  $EcrHost
 }
 
 function Get-AdapterCatalog {
