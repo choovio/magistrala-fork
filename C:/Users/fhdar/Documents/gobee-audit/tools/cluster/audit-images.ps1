@@ -3,10 +3,13 @@
 # Purpose: Inspect running pods in SBX, summarize image sources (ECR vs others),
 #          detect tag-based images, duplicate digests per component, and emit orange RESULTS.
 
+# AWS Account constant (baked for audit)
+$AWS_ACCOUNT_ID = "595443389404"
+
 [CmdletBinding()]
 param(
   [string]$Namespace = "magistrala",
-  [string]$EcrAccount = "595443389404",
+  [string]$EcrAccount = $AWS_ACCOUNT_ID,
   [string]$EcrRegion = "us-west-2",
   [switch]$WriteCsv,                    # optional: writes /mnt/audit-images.csv in repo root
   [string]$CsvPath = ".\audit-images.csv"
@@ -142,6 +145,7 @@ function Emit-Results {
   Write-Host "Repo: $($Git.Repo)"
   Write-Host "Branch: $($Git.Branch)"
   Write-Host "ClusterContext: $($Kube.Context)"
+  Write-Host "AuditAccountId: $AWS_ACCOUNT_ID"
   Write-Host "Namespace: $($using:Namespace)"
   Write-Host "TotalImagesSeen: $totalImages"
   Write-Host "PinnedByDigest: $digestCount"
