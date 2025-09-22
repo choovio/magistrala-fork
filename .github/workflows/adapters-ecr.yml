@@ -61,33 +61,50 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- Discover Go mains using `go list` (repo root context) ---
-      - name: Discover adapter mains
-        id: mains
+      # Guard: SuperMQ template must exist (we've restored it; fail fast if someone deletes it again)
+      - name: Guard SuperMQ template presence
         run: |
           set -euo pipefail
-          # list all packages that are 'main'
-          mains="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... | sed '/^$/d')"
-          echo "All mains:"; echo "$mains"
+          test -f docker/supermq-docker/templates/users.tmpl || { echo "::error::docker/supermq-docker/templates/users.tmpl missing"; exit 1; }
+          head -n 2 docker/supermq-docker/templates/users.tmpl | grep -q 'SPDX-License-Identifier' || { echo "::error::SPDX header missing in users.tmpl"; exit 1; }
+          echo "SuperMQ template present with SPDX."
 
-          # pick http-adapter + ws-adapter by fuzzy match on import path
-          http_main="$(echo "$mains" | grep -E '/(http-adapter|http)/?$' -m1 || true)"
-          ws_main="$(echo "$mains"   | grep -E '/(ws-adapter|ws)/?$'   -m1 || true)"
+      # Discover mains by scanning files (no module assumptions)
+      - name: Discover adapter mains (file scan)
+        id: mains
+        shell: bash
+        run: |
+          set -euo pipefail
+          # collect directories that contain a main.go with 'package main'
+          mapfile -t main_dirs < <(grep -RIl --include='main.go' '^package main$' . | xargs -r -n1 dirname | sort -u)
+          printf 'Found main dirs:\n'; printf ' - %s\n' "${main_dirs[@]}" || true
 
-          # If not found by suffix, try contains
-          [ -z "$http_main" ] && http_main="$(echo "$mains" | grep -E 'http-adapter|http' -m1 || true)"
-          [ -z "$ws_main" ]   && ws_main="$(echo "$mains"   | grep -E 'ws-adapter|ws'     -m1 || true)"
+          pick_main() {
+            local wantA="$1" wantB="$2"
+            # prefer exact suffix match first
+            for d in "${main_dirs[@]}"; do [[ "$d" =~ /$wantA$|/$wantB$ ]] && { echo "$d"; return; }; done
+            # then prefer dirs containing the token
+            for d in "${main_dirs[@]}"; do [[ "$d" =~ $wantA|$wantB ]] && { echo "$d"; return; }; done
+            # fallbacks that commonly exist in this repo layout
+            [[ -d "./cmd/$wantA" ]] && { echo "./cmd/$wantA"; return; }
+            [[ -d "./cmd/$wantB" ]] && { echo "./cmd/$wantB"; return; }
+            echo ""
+          }
 
-          if [ -z "$http_main" ] || [ -z "$ws_main" ]; then
-            echo "::error::Could not detect MAIN import paths. http='$http_main' ws='$ws_main'"
+          http_main="$(pick_main http-adapter http)"
+          ws_main="$(pick_main ws-adapter ws)"
+
+          echo "HTTP MAIN dir: $http_main"
+          echo "WS   MAIN dir: $ws_main"
+
+          if [[ -z "$http_main" || -z "$ws_main" ]]; then
+            echo "::error::Could not detect adapter MAIN dirs. http='$http_main' ws='$ws_main'"
+            echo "main_dirs candidates were:"; printf ' - %s\n' "${main_dirs[@]}" || true
             exit 1
           fi
 
           echo "http_main=$http_main" >> "$GITHUB_OUTPUT"
           echo "ws_main=$ws_main"     >> "$GITHUB_OUTPUT"
-          echo "Detected:"
-          echo "  HTTP MAIN: $http_main"
-          echo "  WS   MAIN: $ws_main"
 
       - name: Build & push http-adapter
         id: http
