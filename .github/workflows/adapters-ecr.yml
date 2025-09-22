@@ -31,30 +31,63 @@ jobs:
       contents: read
       id-token: write
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: adapters-ecr-build
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify required ECR repos exist (no create in CI)
+      - name: Verify ECR repos exist (no create)
         run: |
           set -euo pipefail
           for name in http-adapter ws-adapter; do
-            if ! aws ecr describe-repositories --repository-names "$name" >/dev/null 2>&1; then
-              echo "::error::Missing ECR repo: $name. Create it out-of-band, then rerun."
-              exit 1
-            fi
+            aws ecr describe-repositories --repository-names "$name" >/dev/null 2>&1 \
+              || { echo "::error::Missing ECR repo: $name"; exit 1; }
           done
 
-      - uses: aws-actions/amazon-ecr-login@v2
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- Discover Go mains using `go list` (repo root context) ---
+      - name: Discover adapter mains
+        id: mains
+        run: |
+          set -euo pipefail
+          # list all packages that are 'main'
+          mains="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... | sed '/^$/d')"
+          echo "All mains:"; echo "$mains"
+
+          # pick http-adapter + ws-adapter by fuzzy match on import path
+          http_main="$(echo "$mains" | grep -E '/(http-adapter|http)/?$' -m1 || true)"
+          ws_main="$(echo "$mains"   | grep -E '/(ws-adapter|ws)/?$'   -m1 || true)"
+
+          # If not found by suffix, try contains
+          [ -z "$http_main" ] && http_main="$(echo "$mains" | grep -E 'http-adapter|http' -m1 || true)"
+          [ -z "$ws_main" ]   && ws_main="$(echo "$mains"   | grep -E 'ws-adapter|ws'     -m1 || true)"
+
+          if [ -z "$http_main" ] || [ -z "$ws_main" ]; then
+            echo "::error::Could not detect MAIN import paths. http='$http_main' ws='$ws_main'"
+            exit 1
+          fi
+
+          echo "http_main=$http_main" >> "$GITHUB_OUTPUT"
+          echo "ws_main=$ws_main"     >> "$GITHUB_OUTPUT"
+          echo "Detected:"
+          echo "  HTTP MAIN: $http_main"
+          echo "  WS   MAIN: $ws_main"
 
       - name: Build & push http-adapter
         id: http
@@ -63,12 +96,15 @@ jobs:
           REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           IMAGE="$REG/http-adapter"
           TAG="ci-${GITHUB_SHA::12}"
+
           docker buildx build \
             --platform linux/amd64 \
             --file docker/http-adapter/Dockerfile \
+            --build-arg MAIN='${{ steps.mains.outputs.http_main }}' \
             --tag "$IMAGE:$TAG" \
             --push \
             .
+
           DIGEST="$(aws ecr describe-images \
             --repository-name http-adapter \
             --image-ids imageTag="$TAG" \
@@ -82,12 +118,15 @@ jobs:
           REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           IMAGE="$REG/ws-adapter"
           TAG="ci-${GITHUB_SHA::12}"
+
           docker buildx build \
             --platform linux/amd64 \
             --file docker/ws-adapter/Dockerfile \
+            --build-arg MAIN='${{ steps.mains.outputs.ws_main }}' \
             --tag "$IMAGE:$TAG" \
             --push \
             .
+
           DIGEST="$(aws ecr describe-images \
             --repository-name ws-adapter \
             --image-ids imageTag="$TAG" \
