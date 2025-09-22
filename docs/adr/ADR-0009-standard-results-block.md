@@ -1,3 +1,8 @@
-- The footer must be the orange (`\e[38;5;208m`) block with these exact lines: `==== RESULTS ====`, `<fields>`, `==== END RESULTS ====`.
-- Only include these fields when present: `KubeContext`, `Namespace`, `Deployments`, `Services`, `Ingresses`, `Pods`, `Health checks`, `Samples`.
-- Do not emit any text after the footer block.
+- The footer must be printed in orange (`\e[38;5;208m`) and match this shape:
+  ```
+  ==== RESULTS ====
+  <fields>
+  ==== END RESULTS ====
+  ```
+- Allowed fields: `KubeContext`, `Namespace`, `Deployments`, `Services`, `Ingresses`, `Pods`, `Health checks`, `Samples`.
+- No extra text; print in orange (ANSI 38;5;208).
