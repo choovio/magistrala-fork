@@ -1,6 +1,6 @@
 # Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
-# Purpose: Build & push http-adapter and ws-adapter images from magistrala-fork to ECR with digest output.
+# Purpose: Build & push http-adapter and ws-adapter images from magistrala-fork to ECR and emit digest RESULTS.
 
 name: adapters-ecr
 
@@ -11,8 +11,8 @@ on:
       - sbx/**
       - release/**
     paths:
-      - 'adapters/http/**'
-      - 'adapters/ws/**'
+      - 'docker/http-adapter/**'
+      - 'docker/ws-adapter/**'
       - '.github/workflows/adapters-ecr.yml'
   workflow_dispatch:
 
@@ -49,46 +49,66 @@ jobs:
       # -------- http-adapter --------
       - name: Build & push http-adapter
         id: http
-        working-directory: adapters/http
+        working-directory: docker/http-adapter
         run: |
           set -euo pipefail
           REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           IMAGE="$REG/${{ env.HTTP_REPO }}"
-          docker buildx build --platform linux/amd64 -t "$IMAGE:ci-${GITHUB_SHA::12}" --push .
-          # Resolve digest for the just-pushed tag
+          TAG="ci-${GITHUB_SHA::12}"
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -t "$IMAGE:$TAG" \
+            --push \
+            .
+
           DIGEST="$(aws ecr describe-images \
             --repository-name "${{ env.HTTP_REPO }}" \
-            --image-ids imageTag=ci-${GITHUB_SHA::12} \
-            --query 'imageDetails[0].imageDigest' --output text)"
+            --image-ids imageTag="$TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
 
       # -------- ws-adapter --------
       - name: Build & push ws-adapter
         id: ws
-        working-directory: adapters/ws
+        working-directory: docker/ws-adapter
         run: |
           set -euo pipefail
           REG="${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           IMAGE="$REG/${{ env.WS_REPO }}"
-          docker buildx build --platform linux/amd64 -t "$IMAGE:ci-${GITHUB_SHA::12}" --push .
+          TAG="ci-${GITHUB_SHA::12}"
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -t "$IMAGE:$TAG" \
+            --push \
+            .
+
           DIGEST="$(aws ecr describe-images \
             --repository-name "${{ env.WS_REPO }}" \
-            --image-ids imageTag=ci-${GITHUB_SHA::12} \
-            --query 'imageDetails[0].imageDigest' --output text)"
+            --image-ids imageTag="$TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
 
-      - name: Summarize digests (annotated)
+      - name: Summarize digests (job summary)
         run: |
-          echo "## Adapter image digests" >> $GITHUB_STEP_SUMMARY
-          echo "- http-adapter: ${{ steps.http.outputs.image }}" >> $GITHUB_STEP_SUMMARY
-          echo "- ws-adapter:   ${{ steps.ws.outputs.image }}"   >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Adapter image digests"
+            echo ""
+            echo "- http-adapter: ${{ steps.http.outputs.image }}"
+            echo "- ws-adapter:   ${{ steps.ws.outputs.image }}"
+          } >> $GITHUB_STEP_SUMMARY
 
-      - name: Emit RESULTS block (for copy/paste)
+      - name: Emit standardized RESULTS block
+        shell: bash
         run: |
-          esc=$'\033'
-          orange="${esc}[38;5;214m"; reset="${esc}[0m"
+          esc=$'\033'; orange="${esc}[38;5;214m"; reset="${esc}[0m"
           ts="$(date '+%Y-%m-%d %H:%M:%S %z')"
           {
             echo "==== RESULTS ===="
