@@ -17,7 +17,6 @@ on:
       - ".github/workflows/adapters-ecr.yml"
   workflow_dispatch:
 
-# Top-level permissions (good), but we ALSO set job-level below for OIDC
 permissions:
   contents: read
   id-token: write
@@ -28,23 +27,13 @@ env:
 
 jobs:
   build-and-push:
-    # Grant OIDC at JOB level (required by aws-actions/configure-aws-credentials)
     permissions:
       contents: read
       id-token: write
-
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-
-      - name: Assert AWS_ROLE_ARN is set
-        run: |
-          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
-            echo "::error::Missing secret AWS_ROLE_ARN (required for OIDC)."
-            exit 1
-          fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -53,24 +42,20 @@ jobs:
           role-session-name: adapters-ecr-build
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Ensure ECR repos exist
+      - name: Verify required ECR repos exist (no create in CI)
         run: |
           set -euo pipefail
           for name in http-adapter ws-adapter; do
-            aws ecr describe-repositories --repository-names "$name" >/dev/null 2>&1 || \
-              aws ecr create-repository --repository-name "$name" >/dev/null
+            if ! aws ecr describe-repositories --repository-names "$name" >/dev/null 2>&1; then
+              echo "::error::Missing ECR repo: $name. Create it out-of-band, then rerun."
+              exit 1
+            fi
           done
 
-      # ---- http-adapter (context = repo root; file = docker/http-adapter/Dockerfile) ----
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
       - name: Build & push http-adapter
         id: http
         run: |
@@ -87,11 +72,9 @@ jobs:
           DIGEST="$(aws ecr describe-images \
             --repository-name http-adapter \
             --image-ids imageTag="$TAG" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text)"
+            --query 'imageDetails[0].imageDigest' --output text)"
           echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
 
-      # ---- ws-adapter (context = repo root; file = docker/ws-adapter/Dockerfile) ----
       - name: Build & push ws-adapter
         id: ws
         run: |
@@ -108,19 +91,10 @@ jobs:
           DIGEST="$(aws ecr describe-images \
             --repository-name ws-adapter \
             --image-ids imageTag="$TAG" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text)"
+            --query 'imageDetails[0].imageDigest' --output text)"
           echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
 
-      - name: Summarize digests
-        run: |
-          {
-            echo "## Adapter image digests"
-            echo "- http-adapter: ${{ steps.http.outputs.image }}"
-            echo "- ws-adapter:   ${{ steps.ws.outputs.image }}"
-          } >> $GITHUB_STEP_SUMMARY
-
-      - name: Emit standardized RESULTS block
+      - name: Emit RESULTS
         shell: bash
         run: |
           esc=$'\033'; orange="${esc}[38;5;214m"; reset="${esc}[0m"
