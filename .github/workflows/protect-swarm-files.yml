@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+name: Protect Critical Files
+on:
+  pull_request:
+    paths:
+      - 'docker/supermq-docker/templates/users.tmpl'
+
+jobs:
+  ensure-present:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify users.tmpl exists and is non-empty
+        run: |
+          test -s docker/supermq-docker/templates/users.tmpl || { echo "users.tmpl missing or empty"; exit 1; }
