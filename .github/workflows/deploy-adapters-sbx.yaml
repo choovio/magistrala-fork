@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+# Purpose: Deploy only http/ws adapters into SBX without touching other services.
+
+name: Deploy SBX Adapters
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "ops/sbx/http-adapter.yaml"
+      - "ops/sbx/ws-adapter.yaml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  CLUSTER_NAME: mg-sbx-eks
+  NAMESPACE: magistrala
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Apply adapter manifests
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml
+          kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
+
+      - name: Sanity: show adapter images
+        run: |
+          kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter \
+            -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image
