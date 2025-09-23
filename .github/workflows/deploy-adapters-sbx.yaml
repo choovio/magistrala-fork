@@ -50,9 +50,26 @@ jobs:
         run: |
           kubectl -n "$NAMESPACE" rollout status deploy/http-adapter --timeout=120s || true
           kubectl -n "$NAMESPACE" rollout status deploy/ws-adapter --timeout=120s || true
+
+      - name: Purge legacy ReplicaSets (placeholders/tags)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sel in "app=http-adapter" "app.kubernetes.io/name=http-adapter" "app=ws-adapter" "app.kubernetes.io/name=ws-adapter"; do
+            mapfile -t rslist < <(
+              kubectl -n "$NAMESPACE" get rs -l "$sel" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.template.spec.containers[0].image}{"\n"}{end}' 2>/dev/null
+            )
+            for row in "${rslist[@]:-}"; do
+              name="$(awk '{print $1}' <<<"$row")"
+              img="$(awk '{print $2}' <<<"$row")"
+              # delete RS if image has placeholder, ghcr host, or a tag (not @sha256)
+              if [[ "$img" =~ \<AWS_ACCOUNT_ID\> || "$img" =~ ghcr\.io || "$img" =~ :[A-Za-z0-9._-]+$ ]]; then
+                kubectl -n "$NAMESPACE" delete rs "$name" --ignore-not-found
+              fi
+            done
+          done
           # Extra guard: delete any Terminating/Pending adapter pods
-          kubectl -n "$NAMESPACE" get pod -l app=http-adapter -o name | xargs -r kubectl -n "$NAMESPACE" delete --force --grace-period=0
-          kubectl -n "$NAMESPACE" get pod -l app=ws-adapter   -o name | xargs -r kubectl -n "$NAMESPACE" delete --force --grace-period=0
+          kubectl -n "$NAMESPACE" get pod -l 'app in (http-adapter,ws-adapter)' -o name | xargs -r kubectl -n "$NAMESPACE" delete --force --grace-period=0
 
       - name: Scale adapters to 1
         run: kubectl -n "$NAMESPACE" scale deploy/http-adapter deploy/ws-adapter --replicas=1
