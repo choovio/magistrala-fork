@@ -602,9 +602,9 @@ if ($wsSnapshot -and $wsSnapshot.Image) {
 }
 
 $HttpReplicas = if ($httpSnapshot) { $httpSnapshot.Replicas } else { 0 }
-$HttpReplicasReady = if ($httpSnapshot) { $httpSnapshot.ReadyReplicas } else { 0 }
+$HttpReady = if ($httpSnapshot) { $httpSnapshot.ReadyReplicas } else { 0 }
 $WsReplicas = if ($wsSnapshot) { $wsSnapshot.Replicas } else { 0 }
-$WsReplicasReady = if ($wsSnapshot) { $wsSnapshot.ReadyReplicas } else { 0 }
+$WsReady = if ($wsSnapshot) { $wsSnapshot.ReadyReplicas } else { 0 }
 
 $HttpTag = '(unknown)'
 if ($httpSnapshot) {
@@ -624,7 +624,7 @@ if ($wsSnapshot) {
   }
 }
 
-$deploySample = "http-adapter $($HttpReplicasReady)/$($HttpReplicas) img=$HttpAdapterRepo:$HttpTag; ws-adapter $($WsReplicasReady)/$($WsReplicas) img=$WsAdapterRepo:$WsTag"
+$deploySample = "http-adapter $($HttpReady)/$($HttpReplicas) img=$HttpAdapterRepo:$HttpTag; ws-adapter $($WsReady)/$($WsReplicas) img=$WsAdapterRepo:$WsTag"
 
 $svcSample = Format-ServiceSample -ServicesJson $servicesJson -Adapters $uniqueAdapters
 if (-not $svcSample) { $svcSample = '(none)' }
