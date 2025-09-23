@@ -158,7 +158,7 @@ spec:
     spec:
       containers:
         - name: http-adapter
-          image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/http-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3ffffffffffffffffffffff
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/http-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e345b3bb88b785a6dff2b930d3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -195,7 +195,7 @@ spec:
     app.kubernetes.io/name: http-adapter
   ports:
     - name: http
-      port: 80
+      port: 8080
       targetPort: http
 ---
 apiVersion: networking.k8s.io/v1
@@ -211,13 +211,13 @@ spec:
   rules:
     - http:
         paths:
-          - path: /api/http-adapter
+          - path: /api/http
             pathType: Prefix
             backend:
               service:
                 name: http-adapter
                 port:
-                  name: http
+                  number: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -242,7 +242,7 @@ spec:
     spec:
       containers:
         - name: ws-adapter
-          image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e3ffffffffffffffffffffff
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a
           imagePullPolicy: IfNotPresent
           ports:
             - name: websocket
@@ -279,7 +279,7 @@ spec:
     app.kubernetes.io/name: ws-adapter
   ports:
     - name: websocket
-      port: 8186
+      port: 8080
       targetPort: websocket
 ---
 apiVersion: networking.k8s.io/v1
@@ -295,10 +295,10 @@ spec:
   rules:
     - http:
         paths:
-          - path: /api/ws-adapter
+          - path: /api/ws
             pathType: Prefix
             backend:
               service:
                 name: ws-adapter
                 port:
-                  name: websocket
+                  number: 8080
