@@ -158,7 +158,7 @@ spec:
     spec:
       containers:
         - name: http-adapter
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/http-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e345b3bb88b785a6dff2b930d3
+          image: "595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/http-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e345b3bb88b785a6dff2b930d3"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -242,7 +242,7 @@ spec:
     spec:
       containers:
         - name: ws-adapter
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a
+          image: "595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a"
           imagePullPolicy: IfNotPresent
           ports:
             - name: websocket
