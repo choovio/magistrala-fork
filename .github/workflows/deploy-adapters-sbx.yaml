@@ -38,8 +38,24 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
+      # Apply manifests first (ensures digests/ingress are current)
       - name: Apply adapter manifests
         run: kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml && kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
+
+      # Hard ensure no stuck old replicas: scale down to zero, then back up
+      - name: Scale adapters to 0
+        run: kubectl -n "$NAMESPACE" scale deploy/http-adapter deploy/ws-adapter --replicas=0
+
+      - name: Wait for zero replicas
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deploy/http-adapter --timeout=120s || true
+          kubectl -n "$NAMESPACE" rollout status deploy/ws-adapter --timeout=120s || true
+          # Extra guard: delete any Terminating/Pending adapter pods
+          kubectl -n "$NAMESPACE" get pod -l app=http-adapter -o name | xargs -r kubectl -n "$NAMESPACE" delete --force --grace-period=0
+          kubectl -n "$NAMESPACE" get pod -l app=ws-adapter   -o name | xargs -r kubectl -n "$NAMESPACE" delete --force --grace-period=0
+
+      - name: Scale adapters to 1
+        run: kubectl -n "$NAMESPACE" scale deploy/http-adapter deploy/ws-adapter --replicas=1
 
       - name: Rollout status http-adapter
         run: kubectl -n "$NAMESPACE" rollout status deploy/http-adapter --timeout=180s
