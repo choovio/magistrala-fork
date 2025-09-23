@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+name: SBX NodeGroup Scale
+
+on:
+  workflow_dispatch:
+    inputs:
+      desired:
+        description: "Desired node count"
+        required: true
+        default: "3"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  CLUSTER_NAME: mg-sbx-eks
+
+jobs:
+  scale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Discover nodegroup
+        id: ng
+        shell: bash
+        run: |
+          set -euo pipefail
+          NG="$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --query 'nodegroups[0]' --output text)"
+          echo "NG=$NG"
+          echo "ng=$NG" >> "$GITHUB_OUTPUT"
+
+      - name: Set desired size
+        shell: bash
+        run: |
+          aws eks update-nodegroup-config \
+            --cluster-name "$CLUSTER_NAME" \
+            --nodegroup-name "${{ steps.ng.outputs.ng }}" \
+            --scaling-config desiredSize=${{ github.event.inputs.desired }}
