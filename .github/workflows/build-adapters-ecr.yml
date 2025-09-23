@@ -13,7 +13,13 @@ on:
         required: false
         default: ""
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]
+    paths:
+      - "cmd/http-adapter/**"
+      - "cmd/ws-adapter/**"
+      - "go.*"
+      - "**/*.go"
+  pull_request:
     paths:
       - "cmd/http-adapter/**"
       - "cmd/ws-adapter/**"
