@@ -7,16 +7,19 @@ metadata:
   name: ws-adapter
   namespace: magistrala
   labels:
+    app: ws-adapter
     app.kubernetes.io/name: ws-adapter
     app.kubernetes.io/component: adapter
 spec:
   replicas: 1
   selector:
     matchLabels:
+      app: ws-adapter
       app.kubernetes.io/name: ws-adapter
   template:
     metadata:
       labels:
+        app: ws-adapter
         app.kubernetes.io/name: ws-adapter
         app.kubernetes.io/component: adapter
     spec:
@@ -26,12 +29,16 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8190
+              containerPort: 8080
           env:
             - name: SMQ_WS_ADAPTER_HTTP_HOST
               value: "0.0.0.0"
             - name: SMQ_WS_ADAPTER_HTTP_PORT
-              value: "8190"
+              value: "8080"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
           readinessProbe:
             httpGet:
               path: /health
@@ -51,14 +58,16 @@ metadata:
   name: ws-adapter
   namespace: magistrala
   labels:
+    app: ws-adapter
     app.kubernetes.io/name: ws-adapter
 spec:
   selector:
+    app: ws-adapter
     app.kubernetes.io/name: ws-adapter
   ports:
     - name: http
       port: 8080
-      targetPort: http
+      targetPort: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -66,6 +75,7 @@ metadata:
   name: ws-adapter
   namespace: magistrala
   labels:
+    app: ws-adapter
     app.kubernetes.io/name: ws-adapter
 spec:
   rules:
