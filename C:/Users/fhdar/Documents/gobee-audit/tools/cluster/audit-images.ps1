@@ -3,7 +3,9 @@
 # Purpose: Inspect running pods in SBX, summarize image sources (ECR vs others),
 #          detect tag-based images, duplicate digests per component, and emit orange RESULTS.
 
+# AWS Account constant (baked for audit)
 $AWS_ACCOUNT_ID = "595443389404"
+$EcrHost = "$AWS_ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com"
 
 [CmdletBinding()]
 param(
@@ -152,7 +154,11 @@ function Emit-Results {
   Write-Host "NonECRComponents: $nonEcrComponents"
   Write-Host "DuplicateDigestsByComponent: $dupList"
   $policyAccount = if ($using:EcrAccount) { $using:EcrAccount } else { $AWS_ACCOUNT_ID }
-  $policyRegistry = "$policyAccount.dkr.ecr.$($using:EcrRegion).amazonaws.com"
+  $policyRegistry = if ($using:EcrAccount -and $using:EcrRegion) {
+    "$policyAccount.dkr.ecr.$($using:EcrRegion).amazonaws.com"
+  } else {
+    $EcrHost
+  }
 
   Write-Host "TopTagOffenders: $tagSummary"
   Write-Host "Policy: Require ECR ($policyRegistry) + @sha256 digests"
