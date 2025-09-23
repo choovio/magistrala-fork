@@ -1,87 +1,73 @@
-# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ws-adapter
   namespace: magistrala
-  labels:
-    app: ws-adapter
-    app.kubernetes.io/name: ws-adapter
-    app.kubernetes.io/component: adapter
 spec:
-  replicas: 1
+  # Keep immutable selector EXACTLY as originally used
   selector:
     matchLabels:
-      app: ws-adapter
       app.kubernetes.io/name: ws-adapter
+  replicas: 1
   template:
     metadata:
       labels:
-        app: ws-adapter
         app.kubernetes.io/name: ws-adapter
         app.kubernetes.io/component: adapter
+        app: ws-adapter                 # extra label ONLY on pod
     spec:
       containers:
         - name: ws-adapter
-          image: "595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a"
-          imagePullPolicy: IfNotPresent
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 8080       # align to platform 8080 standard
           env:
             - name: SMQ_WS_ADAPTER_HTTP_HOST
               value: "0.0.0.0"
             - name: SMQ_WS_ADAPTER_HTTP_PORT
               value: "8080"
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
           readinessProbe:
-            httpGet:
-              path: /health
-              port: http
+            httpGet: { path: /health, port: http }
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /health
-              port: http
+            httpGet: { path: /health, port: http }
             initialDelaySeconds: 15
             periodSeconds: 20
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+      imagePullSecrets: []  # ensure GHCR secret NOT referenced
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: ws-adapter
   namespace: magistrala
-  labels:
-    app: ws-adapter
-    app.kubernetes.io/name: ws-adapter
 spec:
   selector:
-    app: ws-adapter
     app.kubernetes.io/name: ws-adapter
   ports:
     - name: http
       port: 8080
       targetPort: 8080
+
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ws-adapter
   namespace: magistrala
-  labels:
-    app: ws-adapter
-    app.kubernetes.io/name: ws-adapter
 spec:
   rules:
-    - http:
+    - host: sbx.gobee.io
+      http:
         paths:
-          - path: /api/ws
+          - path: /api/ws/?(.*)
             pathType: Prefix
             backend:
               service:
