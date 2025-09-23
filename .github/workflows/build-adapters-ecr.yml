@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+# GitHub Actions workflow: Build & Push Adapters to ECR
+# Purpose: Build http-adapter and ws-adapter, push to ECR in 595443389404/us-west-2, emit digests artifact.
+
 name: Build & Push Adapters to ECR
 
 on:
@@ -22,9 +27,6 @@ permissions:
 env:
   AWS_ACCOUNT_ID: "595443389404"
   AWS_REGION: "us-west-2"
-  ECR_HOST: "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-  HTTP_REPO: "${{ env.ECR_HOST }}/choovio/magistrala/http-adapter"
-  WS_REPO:   "${{ env.ECR_HOST }}/choovio/magistrala/ws-adapter"
 
 jobs:
   build-push:
@@ -41,35 +43,53 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Derive repo host and image URIs
+        id: derive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ECR_HOST="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          HTTP_REPO="${ECR_HOST}/choovio/magistrala/http-adapter"
+          WS_REPO="${ECR_HOST}/choovio/magistrala/ws-adapter"
+
+          echo "ECR_HOST=${ECR_HOST}" >> "${GITHUB_ENV}"
+          echo "HTTP_REPO=${HTTP_REPO}" >> "${GITHUB_ENV}"
+          echo "WS_REPO=${WS_REPO}" >> "${GITHUB_ENV}"
+
+          echo "ECR_HOST=${ECR_HOST}" >> "${GITHUB_OUTPUT}"
+          echo "HTTP_REPO=${HTTP_REPO}" >> "${GITHUB_OUTPUT}"
+          echo "WS_REPO=${WS_REPO}" >> "${GITHUB_OUTPUT}"
+
       - name: Ensure ECR repos exist
         shell: bash
         run: |
           set -euo pipefail
           aws ecr describe-repositories --repository-names "choovio/magistrala/http-adapter" >/dev/null 2>&1 || \
-            aws ecr create-repository --repository-name "choovio/magistrala/http-adapter" --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
-          aws ecr describe-repositories --repository-names "choovio/magistrala/ws-adapter"   >/dev/null 2>&1 || \
-            aws ecr create-repository --repository-name "choovio/magistrala/ws-adapter"   --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
+            aws ecr create-repository --repository-name "choovio/magistrala/http-adapter" \
+              --image-tag-mutability IMMUTABLE \
+              --image-scanning-configuration scanOnPush=true
+          aws ecr describe-repositories --repository-names "choovio/magistrala/ws-adapter" >/dev/null 2>&1 || \
+            aws ecr create-repository --repository-name "choovio/magistrala/ws-adapter" \
+              --image-tag-mutability IMMUTABLE \
+              --image-scanning-configuration scanOnPush=true
 
       - name: Login to ECR
-        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set build vars
+      - name: Set build tags
         id: vars
         shell: bash
         run: |
+          set -euo pipefail
           SHA="${GITHUB_SHA}"
-          TS="$(date -u +%Y%m%d%H%M%S)"
-          echo "HTTP_TAG=${SHA}"        >> $GITHUB_OUTPUT
-          echo "WS_TAG=${SHA}"          >> $GITHUB_OUTPUT
-          echo "TS=${TS}"               >> $GITHUB_OUTPUT
+          echo "HTTP_TAG=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "WS_TAG=${SHA}"   >> "${GITHUB_OUTPUT}"
 
       - name: Build http-adapter
         shell: bash
         run: |
           set -euo pipefail
-          docker build \
-            -f ./cmd/http-adapter/Dockerfile \
+          docker build -f ./cmd/http-adapter/Dockerfile \
             -t "${HTTP_REPO}:${{ steps.vars.outputs.HTTP_TAG }}" \
             ./cmd/http-adapter
           docker push "${HTTP_REPO}:${{ steps.vars.outputs.HTTP_TAG }}"
@@ -78,8 +98,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build \
-            -f ./cmd/ws-adapter/Dockerfile \
+          docker build -f ./cmd/ws-adapter/Dockerfile \
             -t "${WS_REPO}:${{ steps.vars.outputs.WS_TAG }}" \
             ./cmd/ws-adapter
           docker push "${WS_REPO}:${{ steps.vars.outputs.WS_TAG }}"
@@ -89,11 +108,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          HTTP_DIGEST="$(aws ecr describe-images --repository-name 'choovio/magistrala/http-adapter' --image-ids imageTag='${{ steps.vars.outputs.HTTP_TAG }}' --query 'imageDetails[0].imageDigest' --output text)"
-          WS_DIGEST="$(aws ecr describe-images --repository-name 'choovio/magistrala/ws-adapter'   --image-ids imageTag='${{ steps.vars.outputs.WS_TAG }}'   --query 'imageDetails[0].imageDigest' --output text)"
-          echo "HTTP_REF=${{ env.HTTP_REPO }}@${HTTP_DIGEST}" >> $GITHUB_OUTPUT
-          echo "WS_REF=${{ env.WS_REPO }}@${WS_DIGEST}"       >> $GITHUB_OUTPUT
-          printf "http=%s\nws=%s\n" "${{ env.HTTP_REPO }}@${HTTP_DIGEST}" "${{ env.WS_REPO }}@${WS_DIGEST}" > adapters-digests.txt
+          HTTP_DIGEST="$(aws ecr describe-images --repository-name 'choovio/magistrala/http-adapter' \
+            --image-ids imageTag='${{ steps.vars.outputs.HTTP_TAG }}' \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          WS_DIGEST="$(aws ecr describe-images --repository-name 'choovio/magistrala/ws-adapter' \
+            --image-ids imageTag='${{ steps.vars.outputs.WS_TAG }}' \
+            --query 'imageDetails[0].imageDigest' --output text)"
+
+          echo "HTTP_REF=${HTTP_REPO}@${HTTP_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "WS_REF=${WS_REPO}@${WS_DIGEST}"       >> "${GITHUB_OUTPUT}"
+
+          printf "http=%s\nws=%s\n" "${HTTP_REPO}@${HTTP_DIGEST}" "${WS_REPO}@${WS_DIGEST}" > adapters-digests.txt
 
       - name: Upload digests artifact
         uses: actions/upload-artifact@v4
