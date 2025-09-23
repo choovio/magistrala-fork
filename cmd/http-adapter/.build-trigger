@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 trigger: adapters-build
 time: 2025-09-23T01:19:05Z
 note: no-op change to run Build & Push Adapters to ECR
