@@ -606,11 +606,25 @@ $HttpReplicasReady = if ($httpSnapshot) { $httpSnapshot.ReadyReplicas } else { 0
 $WsReplicas = if ($wsSnapshot) { $wsSnapshot.Replicas } else { 0 }
 $WsReplicasReady = if ($wsSnapshot) { $wsSnapshot.ReadyReplicas } else { 0 }
 
-$deployEntries = @(
-  "http-adapter $HttpReplicasReady/$HttpReplicas img=$(Format-ImageReference -Snapshot $httpSnapshot -Repository $HttpAdapterRepo)",
-  "ws-adapter $WsReplicasReady/$WsReplicas img=$(Format-ImageReference -Snapshot $wsSnapshot -Repository $WsAdapterRepo)"
-)
-$deploySample = $deployEntries -join '; '
+$HttpTag = '(unknown)'
+if ($httpSnapshot) {
+  if ($httpSnapshot.Tag) {
+    $HttpTag = $httpSnapshot.Tag
+  } elseif ($httpSnapshot.Digest) {
+    $HttpTag = "@$($httpSnapshot.Digest)"
+  }
+}
+
+$WsTag = '(unknown)'
+if ($wsSnapshot) {
+  if ($wsSnapshot.Tag) {
+    $WsTag = $wsSnapshot.Tag
+  } elseif ($wsSnapshot.Digest) {
+    $WsTag = "@$($wsSnapshot.Digest)"
+  }
+}
+
+$deploySample = "http-adapter $($HttpReplicasReady)/$($HttpReplicas) img=$HttpAdapterRepo:$HttpTag; ws-adapter $($WsReplicasReady)/$($WsReplicas) img=$WsAdapterRepo:$WsTag"
 
 $svcSample = Format-ServiceSample -ServicesJson $servicesJson -Adapters $uniqueAdapters
 if (-not $svcSample) { $svcSample = '(none)' }
