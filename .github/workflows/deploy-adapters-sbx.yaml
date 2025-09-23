@@ -7,10 +7,11 @@ name: Deploy SBX Adapters
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches:
+      - main
     paths:
-      - "ops/sbx/http-adapter.yaml"
-      - "ops/sbx/ws-adapter.yaml"
+      - ops/sbx/http-adapter.yaml
+      - ops/sbx/ws-adapter.yaml
 
 permissions:
   id-token: write
@@ -46,5 +47,5 @@ jobs:
       - name: Rollout status ws-adapter
         run: kubectl -n "$NAMESPACE" rollout status deploy/ws-adapter --timeout=180s
 
-      - name: Sanity: show adapter images
-        run: kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image
+      - name: Show adapter images
+        run: kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter -o 'custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image'
