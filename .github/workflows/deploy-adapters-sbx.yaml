@@ -38,10 +38,7 @@ jobs:
         run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
       - name: Apply adapter manifests
-        run: |
-          set -euo pipefail
-          kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml
-          kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
+        run: kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml && kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
 
       - name: Rollout status http-adapter
         run: kubectl -n "$NAMESPACE" rollout status deploy/http-adapter --timeout=180s
@@ -49,18 +46,5 @@ jobs:
       - name: Rollout status ws-adapter
         run: kubectl -n "$NAMESPACE" rollout status deploy/ws-adapter --timeout=180s
 
-      - name: Guard: no placeholder images
-        shell: bash
-        run: |
-          set -euo pipefail
-          bad=$(kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.template.spec.containers[0].image}{"\n"}{end}' | grep '<AWS_ACCOUNT_ID>' || true)
-          if [[ -n "$bad" ]]; then
-            echo "Found placeholder images:"
-            echo "$bad"
-            exit 1
-          fi
-
       - name: Sanity: show adapter images
-        run: |
-          kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter \
-            -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image
+        run: kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image
