@@ -43,6 +43,12 @@ jobs:
           kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml
           kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
 
+      - name: Rollout status
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" rollout status deploy/http-adapter --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status deploy/ws-adapter --timeout=120s
+
       - name: Sanity: show adapter images
         run: |
           kubectl -n "$NAMESPACE" get deploy http-adapter ws-adapter \
