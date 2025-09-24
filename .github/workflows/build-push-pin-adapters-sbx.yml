@@ -1,3 +1,5 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
 name: SBX · Build & Push Adapters (http, ws) → ECR
 
 on:
@@ -84,7 +86,7 @@ jobs:
         id: ensure
         run: |
           set -euo pipefail
-          REPO_NAME="${{ env[matrix.ecr_repo_env] }}"
+          REPO_NAME="${{ env[ matrix.ecr_repo_env ] }}"
           aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1 || \
             aws ecr create-repository --repository-name "$REPO_NAME" >/dev/null
           echo "repo=$REPO_NAME" >> $GITHUB_OUTPUT
@@ -114,9 +116,9 @@ jobs:
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update && sudo apt-get install -y jq
           fi
-          DIGEST="$(jq -r '.["containerimage.digest"] // empty' <<< "$META")"
-          if [ -z "$DIGEST" ]; then echo "No digest from build-push metadata" >&2; exit 1; fi
-          REF="${{ steps.cfg.outputs.registry }}/${{ steps.ensure.outputs.repo }}@$DIGEST"
+          DIGEST="$(jq -r '.["containerimage.digest"]' <<< "$META")"
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then echo "No digest from build-push metadata" >&2; exit 1; fi
+          REF="${{ steps.cfg.outputs.registry }}/${{ steps.ensure.outputs.repo }}@${DIGEST}"
           echo "ref=$REF" >> $GITHUB_OUTPUT
           mkdir -p artifacts
           echo "{\"adapter\":\"${{ matrix.adapter }}\",\"ref\":\"$REF\"}" > "artifacts/${{ matrix.adapter }}.json"
