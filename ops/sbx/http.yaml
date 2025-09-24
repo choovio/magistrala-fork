@@ -25,11 +25,11 @@ spec:
         - containerPort: 8008
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8008
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8008
 ---
 apiVersion: v1

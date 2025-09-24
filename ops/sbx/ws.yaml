@@ -25,11 +25,11 @@ spec:
         - containerPort: 8186
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8186
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8186
 ---
 apiVersion: v1
