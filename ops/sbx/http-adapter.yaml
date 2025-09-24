@@ -1,5 +1,7 @@
+#
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (c) CHOOVIO Inc.
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+#
 
 apiVersion: apps/v1
 kind: Deployment
@@ -78,3 +80,7 @@ spec:
                 name: http-adapter
                 port:
                   number: 8080
+##
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+##
