@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.# Copyright (c) Abstract Machines
+# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
+# SPDX-License-Identifier: MIT
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http
+    app.kubernetes.io/component: adapter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: http
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: http
+        app.kubernetes.io/component: adapter
+    spec:
+      containers:
+        - name: http
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/http-adapter@sha256:481e0789f954be2d4e3d27cbbfd81cd38c5c0fbdc4e965d72908fabe308bd8a0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: SMQ_HTTP_ADAPTER_HOST
+              value: "0.0.0.0"
+            - name: SMQ_HTTP_ADAPTER_PORT
+              value: "80"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http
+spec:
+  selector:
+    app.kubernetes.io/name: http
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: http
+  namespace: magistrala
+  labels:
+    app.kubernetes.io/name: http
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/http-adapter
+            pathType: Prefix
+            backend:
+              service:
+                name: http
+                port:
+                  name: http
+
