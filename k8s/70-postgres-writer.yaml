@@ -1,0 +1,50 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-writer
+  namespace: magistrala
+  labels: { app: postgres-writer }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-writer }
+  template:
+    metadata:
+      labels: { app: postgres-writer }
+    spec:
+      containers:
+        - name: postgres-writer
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/magistrala@sha256:2d74974b546525b4e1f34ce7ac952fdf7f417ee2f8e00312dbccdd238a08999d
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9010
+          readinessProbe:
+            httpGet: { path: /health, port: 9010 }
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 9010 }
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+            periodSeconds: 10
+            failureThreshold: 3
+          envFrom:
+            - secretRef:
+                name: timescale-secrets  # provides DATABASE_URL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-writer
+  namespace: magistrala
+  labels: { app: postgres-writer }
+spec:
+  selector: { app: postgres-writer }
+  ports:
+    - port: 9010
+      targetPort: 9010
+  type: ClusterIP
