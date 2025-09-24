@@ -21,7 +21,8 @@ spec:
     spec:
       containers:
         - name: ws-adapter
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/choovio/magistrala/ws-adapter@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/ws-adapter@sha256:c021866ee8461b7ed2aa5955cc970948ec63ef83bc5bbd52cbce63b069981fa6
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080       # align to platform 8080 standard
