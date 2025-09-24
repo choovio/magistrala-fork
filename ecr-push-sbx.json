@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AuthAndDescribe",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:DescribeRegistry",
+        "ecr:DescribeRepositories",
+        "ecr:DescribeImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateReposIfMissing",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PushPullLayersAndImages",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:BatchGetImage"
+      ],
+      "Resource": [
+        "",
+        ""
+      ]
+    }
+  ]
+}
