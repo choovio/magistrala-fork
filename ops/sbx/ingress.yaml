@@ -1,45 +1,28 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: http
+  name: sbx
   namespace: magistrala
   annotations:
-  alb.ingress.kubernetes.io/scheme: internet-facing
-  alb.ingress.kubernetes.io/target-type: ip
-  alb.ingress.kubernetes.io/group.name: magistrala
-  alb.ingress.kubernetes.io/healthcheck-path: /health
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /\
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
-  ingressClassName: alb
+  ingressClassName: nginx
   rules:
-  - host: http.sbx.gobee.io
+  - host: sbx.gobee.io
     http:
       paths:
-      - path: /
-        pathType: Prefix
+      - path: /http(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: http
             port:
               number: 8008
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ws
-  namespace: magistrala
-  annotations:
-  alb.ingress.kubernetes.io/scheme: internet-facing
-  alb.ingress.kubernetes.io/target-type: ip
-  alb.ingress.kubernetes.io/group.name: magistrala
-  alb.ingress.kubernetes.io/healthcheck-path: /health
-spec:
-  ingressClassName: alb
-  rules:
-  - host: ws.sbx.gobee.io
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
+      - path: /ws(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: ws
