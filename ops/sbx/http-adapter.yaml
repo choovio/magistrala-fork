@@ -1,8 +1,5 @@
-#
+# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 CHOOVIO Inc.
-#
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
