@@ -1,16 +1,19 @@
+<!--
+Copyright (c) CHOOVIO Inc.
+SPDX-License-Identifier: Apache-2.0
+-->
 # SBX Backend Endpoints (magistrala)
 
-- Base HTTP: \http://http.sbx.gobee.io\
-- Base WS:   \http://ws.sbx.gobee.io\
+- Base HTTP proxy: https://sbx.gobee.io/http
+- Base WS proxy:   https://sbx.gobee.io/ws
 
 ## Health contract
-All services MUST expose \/health\ (200 = healthy).
+All services MUST expose `/health` (200 = healthy).
 
 ### Quick checks
-\\\ash
-curl -i http://http.sbx.gobee.io/health
-curl -i http://ws.sbx.gobee.io/health
-\\\
+```sh
+curl -L https://sbx.gobee.io/http/health
+curl -L https://sbx.gobee.io/ws/health
+```
 
-> TLS: pending ACM issuance; will later be \https://\.
-
+> Cloudflare terminates TLS; upstream certificates remain ACM-managed.

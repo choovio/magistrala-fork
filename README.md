@@ -1,3 +1,7 @@
+<!--
+Copyright (c) CHOOVIO Inc.
+SPDX-License-Identifier: Apache-2.0
+-->
 <div align="center">
 
   # Magistrala
@@ -91,6 +95,12 @@ curl -X GET http://localhost:8080/health
 
 For additional usage examples and advanced configurations, visit the [official documentation](https://docs.magistrala.abstractmachines.fr).
 
+
+## SBX Cloudflare DNS
+
+- `sbx.gobee.io` is published in Cloudflare as a **DNS-only** CNAME.
+- The record targets the sandbox Application Load Balancer (`magistrala-sbx-alb.<region>.elb.amazonaws.com`).
+- Keep the proxy status disabled so traffic terminates directly on the AWS ALB/Ingress stack.
 
 ## 📚 Documentation
 
