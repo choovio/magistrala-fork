@@ -63,7 +63,7 @@ jobs:
             for row in "${rslist[@]:-}"; do
               name="$(awk '{print $1}' <<<"$row")"
               img="$(awk '{print $2}' <<<"$row")"
-              if [[ "$img" =~ <AWS_ACCOUNT_ID> || "$img" =~ ghcr\.io || "$img" =~ :[A-Za-z0-9._-]+$ ]]; then
+              if [[ "$img" =~ \<AWS_ACCOUNT_ID\> || "$img" =~ ghcr\.io || "$img" =~ :[A-Za-z0-9._-]+$ ]]; then
                 kubectl -n "$NAMESPACE" delete rs "$name" --ignore-not-found
               fi
             done
