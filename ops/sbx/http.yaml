@@ -1,1 +1,48 @@
-
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http
+  namespace: magistrala
+  labels:
+    app: http
+    app.kubernetes.io/name: http
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http
+  template:
+    metadata:
+      labels:
+        app: http
+        app.kubernetes.io/name: http
+    spec:
+      containers:
+      - name: http
+        image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/http-adapter@sha256:481e0789f954be2d4e3d27cbbfd81cd38c5c0fbdc4e965d72908fabe308bd8a0
+        ports:
+        - containerPort: 8008
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8008
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8008
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http
+  namespace: magistrala
+  labels:
+    app: http
+spec:
+  selector:
+    app: http
+  ports:
+  - name: http
+    port: 8008
+    targetPort: 8008
