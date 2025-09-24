@@ -17,3 +17,9 @@ curl -L https://sbx.gobee.io/ws/health
 ```
 
 > Cloudflare terminates TLS; upstream certificates remain ACM-managed.
+
+## DNS routing via Cloudflare
+
+- `sbx.gobee.io` lives in the Cloudflare `gobee.io` zone as a **DNS-only** CNAME.
+- Point the record at the sandbox Application Load Balancer (`magistrala-sbx-alb.<region>.elb.amazonaws.com`).
+- Keep Cloudflare proxying disabled so traffic reaches the AWS ALB/Ingress stack directly.
