@@ -14,6 +14,23 @@ spec:
   - host: sbx.gobee.io
     http:
       paths:
+      # exact health endpoints -> rewrite to /health (no 308)
+      - path: /http/health
+        pathType: Exact
+        backend:
+          service:
+            name: http
+            port:
+              number: 8008
+      - path: /ws/health
+        pathType: Exact
+        backend:
+          service:
+            name: ws
+            port:
+              number: 8186
+
+      # generic routing with regex (for other API paths)
       - path: /http/?(.*)
         pathType: ImplementationSpecific
         backend:
