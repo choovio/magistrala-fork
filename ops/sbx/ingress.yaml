@@ -14,14 +14,14 @@ spec:
   - host: sbx.gobee.io
     http:
       paths:
-      - path: /http(/|$)(.*)
+      - path: /http/?(.*)
         pathType: ImplementationSpecific
         backend:
           service:
             name: http
             port:
               number: 8008
-      - path: /ws(/|$)(.*)
+      - path: /ws/?(.*)
         pathType: ImplementationSpecific
         backend:
           service:
