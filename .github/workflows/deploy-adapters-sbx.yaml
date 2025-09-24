@@ -49,8 +49,14 @@ jobs:
           kubectl -n "$NAMESPACE" delete deploy/ws-adapter   --ignore-not-found
 
           # Apply manifests
-          kubectl -n "$NAMESPACE" apply -f ops/sbx/http-adapter.yaml
-          kubectl -n "$NAMESPACE" apply -f ops/sbx/ws-adapter.yaml
+          for f in ops/sbx/http-adapter.yaml ops/sbx/ws-adapter.yaml; do
+            if [ -f "$f" ]; then
+              echo "APPLY: $f"
+              kubectl -n "$NAMESPACE" apply -f "$f"
+            else
+              echo "SKIP: $f not present"
+            fi
+          done
 
       - name: Cleanup legacy RS/pods (placeholders/tags/ghcr)
         shell: bash
