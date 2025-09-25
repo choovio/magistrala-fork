@@ -11,8 +11,8 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/server-snippet: |
-      location = /http/healthz { return 404; }
-      location = /ws/healthz { return 404; }
+      location = /http/health { return 404; }
+      location = /ws/health { return 404; }
 spec:
   ingressClassName: nginx
   rules:
