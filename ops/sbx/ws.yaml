@@ -1,0 +1,54 @@
+# Copyright (c) CHOOVIO Inc.
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ws
+  namespace: magistrala
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ws
+  template:
+    metadata:
+      labels:
+        app: ws
+    spec:
+      containers:
+        - name: ws
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/magistrala/ws:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ws
+              containerPort: 8186
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: ws
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ws
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ws
+  namespace: magistrala
+spec:
+  selector:
+    app: ws
+  ports:
+    - name: ws
+      port: 8186
+      targetPort: ws
+  type: ClusterIP
