@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ws
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/ws@sha256:1f48a73677e97a8b28f4dd8995ae4ff36092b3e33eee57184e71e3328e21008a
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/ws@sha256:eca0f8bf9ed895ede98127de031c3c2f6be90573ab609215590eec0dc5518a0a
           imagePullPolicy: IfNotPresent
           ports:
             - name: ws
