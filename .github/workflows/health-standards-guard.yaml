@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Health standards guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  guard:
+    name: Enforce health endpoint and probe standards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure /healthz and /readyz are not used
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking for disallowed health endpoints..."
+          mapfile -t health_hits < <(rg --line-number --hidden -g'!*.md' -g'!ops/snapshots/**' '\/(healthz|readyz)' || true)
+
+          if ((${#health_hits[@]})); then
+            echo "Found disallowed /healthz or /readyz usage in the following locations:"
+            printf '%s\n' "${health_hits[@]}"
+            echo "These endpoints are forbidden. Use /health instead."
+            exit 1
+          fi
+
+          echo "No /healthz or /readyz endpoints detected."
+
+      - name: Ensure probes do not use port 0
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking for probe definitions that use port 0..."
+          mapfile -t port_hits < <(rg --line-number --hidden -g'!*.md' -g'!ops/snapshots/**' 'port:\s*0' || true)
+
+          if ((${#port_hits[@]})); then
+            violations=()
+            for hit in "${port_hits[@]}"; do
+              file=${hit%%:*}
+              if rg --hidden -g'!*.md' -g'!ops/snapshots/**' -q 'probe' "$file"; then
+                violations+=("$hit")
+              fi
+            done
+
+            if ((${#violations[@]})); then
+              echo "Found probe definitions using port 0:"
+              printf '%s\n' "${violations[@]}"
+              echo "Probe ports must be greater than zero."
+              exit 1
+            fi
+          fi
+
+          echo "No probe ports set to 0 were found."
