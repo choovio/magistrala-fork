@@ -18,7 +18,7 @@ spec:
       containers:
         - name: ws
           # Pinned to the sandbox ECR digest to guarantee the exact adapter build.
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/ws@sha256:eca0f8bf9ed895ede98127de031c3c2f6be90573ab609215590eec0dc5518a0a
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/ws-adapter@sha256:c021866ee8461b7ed2aa5955cc970948ec63ef83bc5bbd52cbce63b069981fa6
           imagePullPolicy: IfNotPresent
           ports:
             - name: ws
