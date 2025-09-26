@@ -70,7 +70,7 @@ spec:
     spec:
       containers:
         - name: nats
-          image: nats:2.10.25-alpine
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/nats@sha256:3290c829aa05ddd4da12026783ccaff86f3fbc1f0551722908a934c293cd6228
           imagePullPolicy: IfNotPresent
           args:
             - "-c"
