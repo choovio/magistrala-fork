@@ -1,0 +1,23 @@
+name: Guard against healthz/readyz paths
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  guard:
+    name: Ensure forbidden endpoints are absent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify no /healthz or /readyz paths in Go code
+        run: |
+          if git grep -nE '/(healthz|readyz)' -- '*.go'; then
+            echo "Found forbidden endpoint references."
+            exit 1
+          fi
+          echo "No forbidden endpoints found."
