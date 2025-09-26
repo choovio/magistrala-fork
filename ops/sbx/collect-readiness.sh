@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 set -euo pipefail
 
 NS=${NS:-magistrala}
