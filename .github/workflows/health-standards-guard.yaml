@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 name: Health standards guard
 
 on:
