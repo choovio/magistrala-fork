@@ -18,7 +18,7 @@ spec:
       containers:
         - name: http
           # Pinned to the sandbox ECR digest to guarantee the exact adapter build.
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/http@sha256:98d6f995702d002b4b5d4798365a793bcee66475d27be27fa9982f2274fd5fa2
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/http-adapter@sha256:481e0789f954be2d4e3d27cbbfd81cd38c5c0fbdc4e965d72908fabe308bd8a0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
