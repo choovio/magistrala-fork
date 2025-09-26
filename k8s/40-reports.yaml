@@ -1,0 +1,8 @@
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
