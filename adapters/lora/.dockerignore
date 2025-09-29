@@ -1,0 +1,17 @@
+# Exclude everything by default to keep the build context small.
+**
+
+# Allow the Dockerfile itself.
+!Dockerfile
+
+# Allow module definition and dependencies.
+!go.mod
+!go.sum
+
+# Allow the LoRa command and its package sources.
+!cmd/
+!cmd/lora/
+!cmd/lora/**
+!pkg/
+!pkg/lora/
+!pkg/lora/**
