@@ -3,34 +3,32 @@
 # Copyright (c) CHOOVIO Inc.
 
 set -euo pipefail
-
-AWS_ACC="${AWS_ACC:-595443389404}"
-AWS_REGION="${AWS_REGION:-us-west-2}"
-: "${SRC_IMAGE:?Set SRC_IMAGE to the LoRa adapter you want to mirror}"
-
-WORKDIR="${WORKDIR:-magistrala-fork}"
-REPO_URL="${REPO_URL:-https://github.com/choovio/magistrala-fork.git}"
+AWS_ACC="595443389404"
+AWS_REGION="us-west-2"
+REPO_URL="https://github.com/choovio/magistrala-fork.git"
+WORKDIR="magistrala-fork"
 ECR_REPO="lora"
 
+# Source image to mirror (explicit to avoid prompting). Update later if you switch upstream.
+SRC_IMAGE="ghcr.io/mainfluxlabs/lora:latest"
+
+# 0) ECR login
 aws ecr get-login-password --region "$AWS_REGION" \
 | docker login --username AWS --password-stdin "${AWS_ACC}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+# 1) Mirror LoRa image → ECR and get digest
 docker pull "$SRC_IMAGE"
 docker tag  "$SRC_IMAGE" "${AWS_ACC}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:tmp"
 docker push "${AWS_ACC}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:tmp"
+DIGEST="$(aws ecr describe-images --repository-name "${ECR_REPO}" --image-ids imageTag=tmp --region "${AWS_REGION}" --query 'imageDetails[0].imageDigest' --output text)"
+PINNED="${AWS_ACC}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}@${DIGEST}"
 
-DIGEST="$(aws ecr describe-images \
-  --repository-name "${ECR_REPO}" \
-  --image-ids imageTag=tmp \
-  --region "${AWS_REGION}" \
-  --query 'imageDetails[0].imageDigest' --output text)"
-IMG="${AWS_ACC}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}@${DIGEST}"
-
+# 2) Sync repo and ensure compliant manifest
 [ -d "$WORKDIR" ] || git clone "$REPO_URL" "$WORKDIR"
 cd "$WORKDIR"
 git fetch origin
 git checkout main
 git pull --rebase
-
 mkdir -p ops/sbx
 
 cat > ops/sbx/lora.yaml <<'YAML'
@@ -92,12 +90,15 @@ spec:
       targetPort: http
 YAML
 
-sed -i.bak -E "s#REPLACE_ME_WITH_ECR_DIGEST#${IMG}#g" ops/sbx/lora.yaml
+# Pin image
+sed -i.bak -E "s#REPLACE_ME_WITH_ECR_DIGEST#${PINNED}#g" ops/sbx/lora.yaml
 rm -f ops/sbx/lora.yaml.bak
 
+# 3) Apply + rollout
 kubectl -n magistrala apply -f ops/sbx/lora.yaml
 kubectl -n magistrala rollout status deploy/lora --timeout=180s
 
+# 4) Print live state
 echo "LIVE lora image: $(kubectl -n magistrala get deploy lora -o jsonpath='{.spec.template.spec.containers[0].image}')"
 echo "READINESS       : $(kubectl -n magistrala get deploy lora -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.path}'):"\
 "$(kubectl -n magistrala get deploy lora -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.port}')"
