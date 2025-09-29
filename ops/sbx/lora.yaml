@@ -15,6 +15,7 @@ spec:
     spec:
       containers:
         - name: lora
+          # ECR digest pinned image
           image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/lora@sha256:f9f31c9bb955ed0350b459d944c5ad32adb3f7e61a821a3d1d40fd8c2ffe3817
           imagePullPolicy: IfNotPresent
           ports:
