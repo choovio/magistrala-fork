@@ -11,7 +11,8 @@ spec:
     spec:
       containers:
         - name: lora
-          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/lora@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+          # TODO: replace __REPLACE_DIGEST__ with the actual prod LoRa adapter digest when AWS ECR access is available.
+          image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/lora@sha256:__REPLACE_DIGEST__
           env:
             - { name: CHIRPSTACK_API_URL, value: "https://lns.gobee.io" }
           ports: [{ name: http, containerPort: 8080 }]
