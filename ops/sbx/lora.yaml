@@ -1,5 +1,5 @@
-# Copyright (c) CHOOVIO Inc.
 # SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,37 +8,43 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: lora
+    matchLabels: { app: lora }
   template:
     metadata:
-      labels:
-        app: lora
+      labels: { app: lora }
     spec:
       containers:
         - name: lora
           image: 595443389404.dkr.ecr.us-west-2.amazonaws.com/lora@sha256:f9f31c9bb955ed0350b459d944c5ad32adb3f7e61a821a3d1d40fd8c2ffe3817
           imagePullPolicy: IfNotPresent
-          env:
-            - { name: CHIRPSTACK_API_URL, value: "http://chirpstack:8080" }
           ports:
-            - name: lora
+            - name: http
               containerPort: 8080
+          env:
+            - name: CHIRPSTACK_API_URL
+              value: "https://lns.gobee.io"
+            - name: MAGISTRALA_MQTT_URL
+              value: "mqtt://nats.magistrala.svc.cluster.local:1883"
+            - name: CHIRPSTACK_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: chirpstack-secrets
+                  key: apiToken
           readinessProbe:
             httpGet:
               path: /health
-              port: lora
+              port: http
             initialDelaySeconds: 5
-            timeoutSeconds: 1
             periodSeconds: 10
+            timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: lora
+              port: http
             initialDelaySeconds: 10
-            timeoutSeconds: 1
-            periodSeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
             failureThreshold: 3
 ---
 apiVersion: v1
@@ -47,10 +53,8 @@ metadata:
   name: lora
   namespace: magistrala
 spec:
-  selector:
-    app: lora
+  selector: { app: lora }
   ports:
-    - name: lora
+    - name: http
       port: 8080
-      targetPort: lora
-  type: ClusterIP
+      targetPort: http
