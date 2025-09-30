@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
 set -euo pipefail
 
 # This script builds the LoRa adapter image from this repository and pushes it to AWS ECR.
