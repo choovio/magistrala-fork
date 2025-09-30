@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) CHOOVIO Inc.
 module github.com/absmach/magistrala
 
 go 1.24.5
