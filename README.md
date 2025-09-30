@@ -109,6 +109,28 @@ Complete documentation is available at the [Magistrala official docs page](https
 For CLI usage details, visit the [CLI Documentation](https://docs.magistrala.abstractmachines.fr/cli).
 
 
+## 🔨 Building the LoRa adapter image
+
+For teams that deploy the LoRa adapter separately, the repository provides a
+helper script that automates building and pushing the Docker image to AWS ECR.
+Run the script with your AWS account ID, region, and the desired repository
+name:
+
+```bash
+./scripts/build_lora_ecr.sh <aws-account-id> <aws-region> <repository-name>
+```
+
+For example:
+
+```bash
+./scripts/build_lora_ecr.sh 595443389404 us-west-2 lora
+```
+
+The script ensures that the repository exists, builds the image using
+`adapters/lora/Dockerfile`, pushes it to ECR, and prints the resulting image
+digest for downstream automation.
+
+
 ## 🌐 Community and Contributing
 
 Join the community and contribute to the future of IoT middleware:
