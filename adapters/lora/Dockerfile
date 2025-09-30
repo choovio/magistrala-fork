@@ -13,7 +13,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+COPY cmd/lora ./cmd/lora
+COPY pkg/lora ./pkg/lora
 RUN go list ./cmd/lora
 RUN go build -trimpath -buildvcs=false \
   -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
