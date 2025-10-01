@@ -2,6 +2,4 @@
 // Copyright (c) CHOOVIO Inc.
 package lora
 
-type Config struct {
-	// add fields as needed
-}
+type Config struct{}
