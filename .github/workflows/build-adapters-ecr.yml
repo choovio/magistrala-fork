@@ -13,12 +13,11 @@ on:
         required: false
         default: ""
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
     paths:
-      - "cmd/http-adapter/**"
-      - "cmd/ws-adapter/**"
-      - "go.*"
-      - "**/*.go"
+      - "adapters/http/**"
+      - "adapters/ws/**"
+      - ".github/workflows/build-adapters-ecr.yml"
   pull_request:
     paths:
       - "cmd/http-adapter/**"
