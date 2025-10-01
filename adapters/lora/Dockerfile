@@ -2,7 +2,8 @@
 # Copyright (c) CHOOVIO Inc.
 
 # syntax=docker/dockerfile:1.7
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.24.5-bookworm AS builder
+ENV GOTOOLCHAIN=go1.24.5
 WORKDIR /src
 
 COPY go.mod go.sum ./
