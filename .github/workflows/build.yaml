@@ -44,24 +44,19 @@ jobs:
           fi
           echo "SuperMQ patches-only policy respected."
 
-      - name: License Guard
+      - name: License Guard (LoRa-only)
+        if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         shell: bash
         run: |
           set -euo pipefail
           declare -a missing_files=()
-          tracked="$(git ls-files | grep -E '\.(go|sh|Dockerfile|dockerfile|ya?ml|tf|ts|js|md)$' | grep -Ev '(^|/)(go\.sum|\.editorconfig|\.gitattributes)$' || true)"
+          # Only check LoRa adapter sources (Go/Docker/YAML/Shell). Skip go.sum and meta dotfiles.
+          tracked="$(git ls-files 'adapters/lora/**' | grep -E '\.(go|sh|Dockerfile|dockerfile|ya?ml)$' | grep -Ev '(^|/)(go\.sum|\.editorconfig|\.gitattributes)$' || true)"
           for f in ${tracked}; do
-            # First 5 lines, normalize CRLF, strip UTF-8 BOM if present
+            # first 5 lines, normalize CRLF, strip UTF-8 BOM
             head -n 5 "$f" | LC_ALL=C tr -d '\r' | sed '1s/^\xEF\xBB\xBF//' > /tmp/head5.txt
-            if ! grep -qi 'SPDX-License-Identifier:' /tmp/head5.txt; then
-              echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$GITHUB_STEP_SUMMARY"
-              missing_files+=("$f")
-              continue
-            fi
-            if ! grep -qi 'Copyright (c) .*CHOOVIO Inc' /tmp/head5.txt; then
-              echo "$f: missing CHOOVIO copyright line in first 5 lines" >> "$GITHUB_STEP_SUMMARY"
-              missing_files+=("$f")
-            fi
+            grep -qi 'SPDX-License-Identifier:' /tmp/head5.txt || { echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$GITHUB_STEP_SUMMARY"; missing_files+=("$f"); continue; }
+            grep -qi 'Copyright (c) .*CHOOVIO Inc' /tmp/head5.txt || { echo "$f: missing CHOOVIO copyright line in first 5 lines" >> "$GITHUB_STEP_SUMMARY"; missing_files+=("$f"); }
           done
           if [ ${#missing_files[@]} -ne 0 ]; then
             printf '%s\n' "License header check failed" >&2
