@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) CHOOVIO Inc.
+name: ECR Build / LoRa
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'adapters/lora/**'
+      - '.github/workflows/build-lora.yml'
+permissions:
+  contents: read
+  id-token: write
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT_ID: 595443389404
+  ECR_REPO: lora
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::595443389404:role/GithubActionsECRPush
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build
+        run: |
+          set -euo pipefail
+          TAG="lora-${GITHUB_SHA::7}"
+          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${TAG}"
+          docker build -t "$IMAGE" adapters/lora
+          docker push "$IMAGE"
+          DIGEST=$(aws ecr describe-images --repository-name "${ECR_REPO}" --region "${AWS_REGION}" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          echo "FULL=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}@${DIGEST}" | tee lora-digest.txt
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lora-digest
+          path: lora-digest.txt
