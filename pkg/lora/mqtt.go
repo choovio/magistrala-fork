@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) CHOOVIO Inc.
 
+// MQTT client utilities for LoRa messaging.
+
 package lora
 
 import (
