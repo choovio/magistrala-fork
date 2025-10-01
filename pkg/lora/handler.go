@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) CHOOVIO Inc.
 
+// HTTP handlers for LoRa adapter endpoints.
+
 package lora
 
 import (
