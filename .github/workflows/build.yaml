@@ -44,48 +44,30 @@ jobs:
           fi
           echo "SuperMQ patches-only policy respected."
 
-      - name: License guard
+      - name: License Guard
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_REF="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE_BRANCH="$(git remote show origin | awk '/HEAD branch/ {print $NF}')"
-            BASE_REF="origin/${BASE_BRANCH}"
-          fi
-          git fetch origin +refs/heads/*:refs/remotes/origin/* >/dev/null 2>&1 || true
-
-          FAIL_FILE="$(mktemp)"
-          trap 'rm -f "$FAIL_FILE"' EXIT
-
-          while IFS= read -r f; do
-            [[ -f "$f" ]] || continue
-
-            case "$f" in
-              build/*|coverage/*) continue ;;
-            esac
-            if [[ "$f" == *vernemq* ]]; then
+          declare -a missing_files=()
+          tracked="$(git ls-files | grep -E '\.(go|sh|Dockerfile|dockerfile|ya?ml|tf|ts|js|md)$' | grep -Ev '(^|/)(go\.sum|\.editorconfig|\.gitattributes)$' || true)"
+          for f in ${tracked}; do
+            # First 5 lines, normalize CRLF, strip UTF-8 BOM if present
+            head -n 5 "$f" | LC_ALL=C tr -d '\r' | sed '1s/^\xEF\xBB\xBF//' > /tmp/head5.txt
+            if ! grep -qi 'SPDX-License-Identifier:' /tmp/head5.txt; then
+              echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$GITHUB_STEP_SUMMARY"
+              missing_files+=("$f")
               continue
             fi
-            case "$f" in
-              CODEOWNERS|LICENSE|MAINTAINERS|enabled_plugins|rabbitmq.conf) continue ;;
-            esac
-            case "$f" in
-              *.crt|*.key|*.pem|*.zed|*.hcl|*.md|*.json|*.csv|*.mod|*.sum|*.tmpl|*.args) continue ;;
-            esac
-
-            head -n 5 "$f" | awk 'BEGIN{IGNORECASE=1} {print}' > /tmp/head5.txt
-            grep -q "SPDX-License-Identifier:" /tmp/head5.txt || { echo "$f: missing SPDX-License-Identifier in first 5 lines" >> "$FAIL_FILE"; continue; }
-            grep -q "Copyright (c) .*CHOOVIO Inc" /tmp/head5.txt || { echo "$f: missing required CHOOVIO copyright line in first 5 lines" >> "$FAIL_FILE"; }
-          done < <(git diff --name-only "$BASE_REF"...HEAD)
-
-          if [[ -s "$FAIL_FILE" ]]; then
-            echo "::error::License guard failures detected:"
-            cat "$FAIL_FILE"
+            if ! grep -qi 'Copyright (c) .*CHOOVIO Inc' /tmp/head5.txt; then
+              echo "$f: missing CHOOVIO copyright line in first 5 lines" >> "$GITHUB_STEP_SUMMARY"
+              missing_files+=("$f")
+            fi
+          done
+          if [ ${#missing_files[@]} -ne 0 ]; then
+            printf '%s\n' "License header check failed" >&2
+            printf '%s\n' "${missing_files[@]}" >&2
             exit 1
           fi
-          echo "License guard passed."
 
   discover-build-contexts:
     name: Discover Docker build contexts
