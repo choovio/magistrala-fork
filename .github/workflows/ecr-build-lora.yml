@@ -1,72 +1,43 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) CHOOVIO Inc.
-
 name: ECR Build / LoRa
-
 on:
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Image tag to build (e.g. sbx or commit SHA)"
-        required: false
-        default: sbx
   push:
-    branches: [ "main" ]
     paths:
-      - "adapters/lora/**"
-      - ".github/workflows/ecr-build-lora.yml"
-
+      - 'adapters/lora/**'
+      - '.github/workflows/build-lora.yml'
 permissions:
   contents: read
   id-token: write
-
 env:
   AWS_REGION: us-west-2
-  ECR_REGISTRY: 595443389404.dkr.ecr.us-west-2.amazonaws.com
+  AWS_ACCOUNT_ID: 595443389404
   ECR_REPO: lora
-
 jobs:
-  build-push:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GHA_ECR_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::595443389404:role/GithubActionsECRPush
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
+      - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set TAG and IMAGE_NAME
-        id: meta
+      - name: Build
         run: |
-          echo "TAG=${{ github.event.inputs.image_tag || github.sha }}" >> $GITHUB_OUTPUT
-          echo "IMAGE_NAME=${ECR_REGISTRY}/${ECR_REPO}" >> $GITHUB_ENV
-
-      - name: Build image
-        run: |
-          docker build -f adapters/lora/Dockerfile -t "$IMAGE_NAME:${{ steps.meta.outputs.TAG }}" adapters/lora
-
-      - name: Push image
-        run: |
-          docker push "$IMAGE_NAME:${{ steps.meta.outputs.TAG }}"
-
-      - name: Resolve digest and write artifact
-        run: |
-          DIGEST=$(aws ecr describe-images \
-            --repository-name "${ECR_REPO}" \
-            --image-ids imageTag="${{ steps.meta.outputs.TAG }}" \
-            --query 'imageDetails[0].imageDigest' --output text)
-          echo "FULL=${IMAGE_NAME}@${DIGEST}" > lora-digest.txt
-          cat lora-digest.txt
-
+          set -euo pipefail
+          TAG="lora-${GITHUB_SHA::7}"
+          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${TAG}"
+          docker build -t "$IMAGE" adapters/lora
+          docker push "$IMAGE"
+          DIGEST=$(aws ecr describe-images --repository-name "${ECR_REPO}" --region "${AWS_REGION}" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          echo "FULL=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}@${DIGEST}" | tee lora-digest.txt
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
           name: lora-digest
           path: lora-digest.txt
-          if-no-files-found: error
