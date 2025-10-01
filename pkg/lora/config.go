@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) CHOOVIO Inc.
-
 // Configuration definitions and parsing for the LoRa adapter.
 
 package lora
