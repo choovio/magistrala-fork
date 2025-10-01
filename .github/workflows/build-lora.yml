@@ -34,7 +34,7 @@ jobs:
           IMAGE_NAME="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
           TAG="lora-${GITHUB_SHA::7}"
           IMAGE="${IMAGE_NAME}:${TAG}"
-          docker build -t "$IMAGE" adapters/lora
+          docker build -f adapters/lora/Dockerfile -t "$IMAGE" .
           docker push "$IMAGE"
           DIGEST=$(aws ecr describe-images --repository-name "${ECR_REPO}" --region "${AWS_REGION}" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
           echo "FULL=${IMAGE_NAME}@${DIGEST}" | tee lora-digest.txt
