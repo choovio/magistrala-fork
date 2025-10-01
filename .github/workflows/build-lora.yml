@@ -14,7 +14,7 @@ permissions:
 env:
   AWS_REGION: us-west-2
   AWS_ACCOUNT_ID: 595443389404
-  ECR_REPO: lora
+  ECR_REPOSITORY: lora
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -28,16 +28,21 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
-      - name: Build
+      - name: Build and push image
         run: |
           set -euo pipefail
-          IMAGE_NAME="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           TAG="lora-${GITHUB_SHA::7}"
-          IMAGE="${IMAGE_NAME}:${TAG}"
-          docker build -f adapters/lora/Dockerfile -t "$IMAGE" .
-          docker push "$IMAGE"
-          DIGEST=$(aws ecr describe-images --repository-name "${ECR_REPO}" --region "${AWS_REGION}" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
-          echo "FULL=${IMAGE_NAME}@${DIGEST}" | tee lora-digest.txt
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          docker build -f adapters/lora/Dockerfile -t "${IMAGE}" .
+          docker push "${IMAGE}"
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --region "${AWS_REGION}" \
+            --image-ids imageTag="${TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          echo "FULL=${ECR_REGISTRY}/lora@${DIGEST}" | tee lora-digest.txt
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:

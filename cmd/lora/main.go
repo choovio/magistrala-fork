@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) CHOOVIO Inc.
-// LoRa adapter service entry point.
 
 package main
 
