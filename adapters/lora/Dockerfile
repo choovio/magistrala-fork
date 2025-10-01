@@ -6,7 +6,7 @@ FROM golang:1.24.5-bookworm AS builder
 WORKDIR /src
 
 # module files (adapter only)
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # source

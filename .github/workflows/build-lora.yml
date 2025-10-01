@@ -59,9 +59,11 @@ jobs:
         run: |
           DIGEST=$(aws ecr describe-images \
             --repository-name "${ECR_REPO}" \
+            --region "${AWS_REGION}" \
             --image-ids imageTag="${{ steps.meta.outputs.TAG }}" \
             --query 'imageDetails[0].imageDigest' --output text)
-          echo "FULL=${IMAGE_NAME}@${DIGEST}" > lora-digest.txt
+          FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}@${DIGEST}"
+          echo "FULL=${FULL_IMAGE}" > lora-digest.txt
           cat lora-digest.txt
 
       - name: Upload digest artifact
